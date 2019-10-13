@@ -54,8 +54,8 @@ func main() {
 
 	log.Printf("Current Unix Time: %v\n", time.Now().Unix())
 
-	//greet(path.Base(os.Args[0]))
 	color.Set(color.FgMagenta)
+	//fmt.Println(path.Base(os.Args[0]))
 	emoji.Printf("Acquiring repos for %s [ git clone :hamburger: | git pull :fries: ]\n\n", bbOwner)
 	color.Unset() // Don't forget to unset
 	//greeting := ":hamburger:"
@@ -102,12 +102,23 @@ func main() {
 	for i, j := range repoList {
 		wg.Add(1)
 		//fmt.Printf("%v> %v\n", i, j)
-		go func(i int, j string, rdir string) {
+		go func(i int, j string, dir string) {
 			defer wg.Done()
-			errNum := gitClone(j, rdir)
-			if errNum == 128 {
-				gitPull(j)
+			//errNum := gitClone(j, dir)
+			//gitCloneString := Sprintf("git clone %s/%s", BBURL, j)
+			gitClone := "git clone " + BBURL + "/" + j
+			errCloneNum := repoAction(j, gitClone, dir, ":hamburger:", "", "", "")
+			if errCloneNum == 128 {
+				//gitPull(j)
+				gitPull := "git pull"
+				errPullNum := repoAction(j, gitPull, dir, "", ":fries:", ":poop:", ":thumbsdown:")
+				if errPullNum != 0 {
+					emoji.Printf(":poop:")
+				}
 			}
+			//
+			//gitSearch(j)
+			//
 			//fmt.Printf("%vth goroutine done.\n", i)
 		}(i, j, reposBaseDir+"/"+bbOwner)
 	}
@@ -118,11 +129,9 @@ func main() {
 
 } //
 
-func gitClone(r string, rdir string) int {
-	// Git clone repository r
+func repoAction(r string, cmdstr string, rdir string, win string, any string, fail string, fcess string) int {
 
-	gitCloneString := fmt.Sprintf("git clone %s/%s", BBURL, r)
-	cmd := exec.Command("bash", "-c", gitCloneString)
+	cmd := exec.Command("bash", "-c", cmdstr)
 	cmd.Dir = rdir
 
 	var errorNumber int = 0
@@ -131,49 +140,30 @@ func gitClone(r string, rdir string) int {
 		if err != nil {
 			//os.Stderr.WriteString(fmt.Sprintf("Error: %s\n", err.Error()))
 			log.Printf("Error: %s\n", err.Error())
+			if fail != "" {
+				emoji.Printf(fail)
+			}
 		}
 		if exitError, ok := err.(*exec.ExitError); ok {
 			waitStatus = exitError.Sys().(syscall.WaitStatus)
 			errorNumber = waitStatus.ExitStatus()
-			////fmt.Printf("Output: %s\n", []byte(fmt.Sprintf("%d", waitStatus.ExitStatus())))
-			//fmt.Printf("Output: %s\n", []byte(fmt.Sprintf("%d", errorNumber)))
+			log.Printf("Output: %s\n", []byte(fmt.Sprintf("%d", waitStatus.ExitStatus())))
+			if fcess != "" {
+				emoji.Printf(fcess)
+			}
 		}
 	} else {
 		// Success
 		waitStatus = cmd.ProcessState.Sys().(syscall.WaitStatus)
 		errorNumber = waitStatus.ExitStatus()
-		//fmt.Printf("Output: %s\n", []byte(fmt.Sprintf("%d", waitStatus.ExitStatus())))
-		emoji.Printf(":hamburger:")
-
-	}
-	return errorNumber
-}
-
-func gitPull(r string) int {
-	gitPullString := fmt.Sprintf("git pull")
-	cmd := exec.Command("bash", "-c", gitPullString)
-	cmd.Dir = "repos/" + r
-	//fmt.Printf("\ncmd.Dir: %v\n", cmd.Dir)
-	var errorNumber int = 0
-	var waitStatus syscall.WaitStatus
-	if err := cmd.Run(); err != nil {
-		if err != nil {
-			//os.Stderr.WriteString(fmt.Sprintf("Error: %s\n", err.Error()))
-			log.Printf("Error: %s\n", err.Error())
+		log.Printf("Output: %s\n", []byte(fmt.Sprintf("%d", waitStatus.ExitStatus())))
+		if win != "" {
+			emoji.Printf(win)
 		}
-		if exitError, ok := err.(*exec.ExitError); ok {
-			waitStatus = exitError.Sys().(syscall.WaitStatus)
-			errorNumber = waitStatus.ExitStatus()
-			////fmt.Printf("Output: %s\n", []byte(fmt.Sprintf("%d", waitStatus.ExitStatus())))
-			//fmt.Printf("Output: %s\n", []byte(fmt.Sprintf("%d", errorNumber)))
-		}
-	} else {
-		// Success
-		waitStatus = cmd.ProcessState.Sys().(syscall.WaitStatus)
-		errorNumber = waitStatus.ExitStatus()
-		//fmt.Printf("Output: %s\n", []byte(fmt.Sprintf("%d", waitStatus.ExitStatus())))
 	}
-	emoji.Printf(":fries:")
+	if any != "" {
+		emoji.Printf(any)
+	}
 	return errorNumber
 }
 
@@ -187,19 +177,5 @@ func createDir(dir string) {
 	}
 	//fmt.Println(mkdirCmd)
 	fmt.Printf(string(mkdirExecOut))
-
-}
-
-func greet(g string) {
-	//color.Cyan(g) //color.Red(g) //color.Green(g)
-	//color.Blue(g) //color.Yellow(g) //color.Magenta(g)
-	//time.Sleep(sleepytime * time.Second)
-	color.Set(color.FgMagenta)
-	fmt.Printf(g)
-	defer color.Unset() // Don't forget to unset
-	fmt.Println()
-	//color.Set(color.FgRed)
-	//fmt.Printf(g)
-	//color.Unset() // Don't forget to unset
 
 }
