@@ -13,5 +13,6 @@
 
 # bb-sar
 .DS_Store
-repos*
+repos
 tmp
+logs
