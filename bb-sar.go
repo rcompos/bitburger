@@ -3,6 +3,7 @@ package main
 import (
 	//"github.com/ktrysmt/go-bitbucket"
 
+	"flag"
 	"fmt"
 	"log"
 	"math/rand"
@@ -26,20 +27,18 @@ func main() {
 
 	rand.Seed(time.Now().UnixNano())
 
-	// Must set BITBUCKET_USERNAME, BITBUCKET_PASSWORD and BITBUCKET_OWNER
-	bbUser := os.Getenv("BITBUCKET_USERNAME")
-	bbPassword := os.Getenv("BITBUCKET_PASSWORD")
-	bbOwner := os.Getenv("BITBUCKET_OWNER")
-	bbRole := os.Getenv("BITBUCKET_ROLE")
-	//bbReposlug := os.Getenv("BITBUCKET_REPOSLUG")
-	//fmt.Println("BITBUCKET_USERNAME:", bbUser)
-	//fmt.Println("BITBUCKET_PASSWORD:", bbPassword)
-	//fmt.Println("BITBUCKET_OWNER:", bbOwner)
-	//fmt.Println("BITBUCKET_REPOSLUG:", bbReposlug)
+	var bbUser, bbPassword, bbOwner, bbRole string
+	//var numWorkers int
+	flag.StringVar(&bbUser, "u", os.Getenv("BITBUCKET_USERNAME"), "Bitbucket user")
+	flag.StringVar(&bbPassword, "p", os.Getenv("BITBUCKET_PASSWORD"), "Bitbucket password")
+	flag.StringVar(&bbOwner, "o", os.Getenv("BITBUCKET_OWNER"), "Bitbucket owner")
+	flag.StringVar(&bbRole, "r", os.Getenv("BITBUCKET_ROLE"), "Bitbucket role")
+	//flag.IntVar(&numWorkers, "w", 100, "Number of worker threads")
+	flag.Parse()
 
-	// TODO: CLI args
-
-	// TODO:  Check exists BITBUCKET_USERNAME, BITBUCKET_PASSWORD and BITBUCKET_OWNER
+	if bbUser == "" || bbPassword == "" {
+		panic("Must supply user and password!")
+	}
 
 	logsDir := "logs"
 	createDir(logsDir)
