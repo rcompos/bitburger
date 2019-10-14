@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -35,6 +36,8 @@ func main() {
 	//fmt.Println("BITBUCKET_PASSWORD:", bbPassword)
 	//fmt.Println("BITBUCKET_OWNER:", bbOwner)
 	//fmt.Println("BITBUCKET_REPOSLUG:", bbReposlug)
+
+	// TODO: CLI args
 
 	// TODO:  Check exists BITBUCKET_USERNAME, BITBUCKET_PASSWORD and BITBUCKET_OWNER
 
@@ -102,16 +105,16 @@ func main() {
 	for i, j := range repoList {
 		wg.Add(1)
 		//fmt.Printf("%v> %v\n", i, j)
-		go func(i int, j string, dir string) {
+		go func(i int, j string, dir string, owner string) {
 			defer wg.Done()
 			//errNum := gitClone(j, dir)
 			//gitCloneString := Sprintf("git clone %s/%s", BBURL, j)
 			gitClone := "git clone " + BBURL + "/" + j
-			errCloneNum := repoAction(j, gitClone, dir, ":hamburger:", "", "", "")
+			errCloneNum := repoAction(j, gitClone, dir+"/"+owner, ":hamburger:", "", "", "")
 			if errCloneNum == 128 {
 				//gitPull(j)
 				gitPull := "git pull"
-				errPullNum := repoAction(j, gitPull, dir, "", ":fries:", ":poop:", ":thumbsdown:")
+				errPullNum := repoAction(j, gitPull, dir+"/"+owner, "", ":fries:", ":poop:", ":thumbsdown:")
 				if errPullNum != 0 {
 					emoji.Printf(":poop:")
 				}
@@ -119,8 +122,39 @@ func main() {
 			//
 			//gitSearch(j)
 			//
+			//# DIR=.; OLD='hello'; NEW='H3110'; find $DIR -type f -print -exec grep -Iq . {} \; -exec perl -pe"s/$OLD/$NEW/g" {} \;
+
+			dirRepo := dir + "/" + j
+			fmt.Printf("%s\n", dirRepo)
+			searchStr := "the"
+			replaceStr := "TTTHHHEE"
+			// # find . -path ./.git -prune -o -type f -print -exec grep -Iq . {} \;
+			//sar := `/usr/bin/find ` + dirRepo + ` -type f -print -exec grep -Iq . {} \; -exec " {} \/usr/bin/perl -i -pe\"s/` + searchStr + `/` + replaceStr + `/g\;`
+			//sar := `/usr/bin/find . -path ./.git -prune -o -type f -print  -exec grep -Iq . {} \;`
+			//sar := `find . -path ./.git -prune -o -type f -print  -exec grep -Iq . {} \; -exec perl -i -pe\"s/` + searchStr + `/` + replaceStr + `/g {} \;`
+			//sar := `find . -path ./.git -prune -o -type f -print  -exec grep -Iq . {} \; -exec perl -i -pe"s/the/TTTHHHEEE/g" {} \;`
+			sar := `find . -path ./.git -prune -o -type f -print  -exec grep -Iq . {} \; -exec perl -i -pe"s/` + searchStr + `/` + replaceStr + `/g" {} \;`
+			//\; -exec /usr/bin/perl -i -pe\"s/` + searchStr + `/` + replaceStr + `/g\" {} \;`
+
+			sarExec := exec.Command("bash", "-c", sar)
+			sarExec.Dir = dirRepo
+			sarExecOut, err := sarExec.Output()
+			if err != nil {
+				panic(err)
+				fmt.Printf("ERROR: %v\n", err)
+			}
+			fmt.Printf(string(sarExecOut))
+
+			//errSearchNum := repoAction(j, sar, dir+"/"+j, "", ":thumbsup:", ":thumbsdown:", ":thumbsdown:")
+			//if errSearchNum != 0 {
+			//	emoji.Printf(":poop:")
+			//}
+
+			//walkDir(dirRepo)
+
 			//fmt.Printf("%vth goroutine done.\n", i)
-		}(i, j, reposBaseDir+"/"+bbOwner)
+			//}(i, j, reposBaseDir+"/"+bbOwner)
+		}(i, j, reposBaseDir, bbOwner)
 	}
 
 	wg.Wait()
@@ -128,6 +162,33 @@ func main() {
 	fmt.Println(" Goodbye world!")
 
 } //
+
+func walkDir(d string) {
+
+	var subDirToSkip = ".git"
+	//err := filepath.Walk(".",
+	err := filepath.Walk(d,
+		func(p string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() && info.Name() == subDirToSkip {
+				//fmt.Printf("skipping a dir without errors: %+v \n", info.Name())
+				return filepath.SkipDir
+			}
+			//fmt.Printf("visited file or dir: %q\n", p)
+			fmt.Printf("%s\n", p)
+
+			// Perform search
+			checkFileInfo(p)
+
+			return nil
+		})
+	if err != nil {
+		log.Println(err)
+	}
+
+}
 
 func repoAction(r string, cmdstr string, rdir string, win string, any string, fail string, fcess string) int {
 
@@ -178,4 +239,24 @@ func createDir(dir string) {
 	//fmt.Println(mkdirCmd)
 	fmt.Printf(string(mkdirExecOut))
 
+}
+
+func checkFileInfo(f string) {
+	//fi, err := os.Lstat("some-filename")
+	fi, err := os.Lstat(f)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Printf("permissions: %#o\n", fi.Mode().Perm()) // 0400, 0777, etc.
+	switch mode := fi.Mode(); {
+	case mode.IsRegular():
+		fmt.Println("regular file")
+	case mode.IsDir():
+		fmt.Println("directory")
+	case mode&os.ModeSymlink != 0:
+		fmt.Println("symbolic link")
+	case mode&os.ModeNamedPipe != 0:
+		fmt.Println("named pipe")
+	}
 }
