@@ -107,34 +107,32 @@ func main() {
 		//fmt.Printf("%v> %v\n", i, j)
 		go func(i int, j string, dir string, owner string) {
 			defer wg.Done()
-			//errNum := gitClone(j, dir)
-			//gitCloneString := Sprintf("git clone %s/%s", BBURL, j)
+			dirOwner := dir + "/" + owner
 			gitClone := "git clone " + BBURL + "/" + j
-			errCloneNum := repoAction(j, gitClone, dir+"/"+owner, ":hamburger:", "", "", "")
+			errCloneNum := repoAction(j, gitClone, dirOwner, ":hamburger:", "", "", "")
 			if errCloneNum == 128 {
-				//gitPull(j)
 				gitPull := "git pull"
-				errPullNum := repoAction(j, gitPull, dir+"/"+owner, "", ":fries:", ":poop:", ":thumbsdown:")
+				errPullNum := repoAction(j, gitPull, dirOwner, "", ":fries:", ":poop:", ":thumbsdown:")
 				if errPullNum != 0 {
 					emoji.Printf(":poop:")
 				}
 			}
-			//
-			//gitSearch(j)
-			//
+
+			//# The following one-liner shell command will search and replace all files recursively.
 			//# DIR=.; OLD='hello'; NEW='H3110'; find $DIR -type f -print -exec grep -Iq . {} \; -exec perl -pe"s/$OLD/$NEW/g" {} \;
 
 			dirRepo := dir + "/" + j
 			fmt.Printf("%s\n", dirRepo)
-			searchStr := "the"
-			replaceStr := "TTTHHHEE"
-			// # find . -path ./.git -prune -o -type f -print -exec grep -Iq . {} \;
-			//sar := `/usr/bin/find ` + dirRepo + ` -type f -print -exec grep -Iq . {} \; -exec " {} \/usr/bin/perl -i -pe\"s/` + searchStr + `/` + replaceStr + `/g\;`
-			//sar := `/usr/bin/find . -path ./.git -prune -o -type f -print  -exec grep -Iq . {} \;`
-			//sar := `find . -path ./.git -prune -o -type f -print  -exec grep -Iq . {} \; -exec perl -i -pe\"s/` + searchStr + `/` + replaceStr + `/g {} \;`
-			//sar := `find . -path ./.git -prune -o -type f -print  -exec grep -Iq . {} \; -exec perl -i -pe"s/the/TTTHHHEEE/g" {} \;`
-			sar := `find . -path ./.git -prune -o -type f -print  -exec grep -Iq . {} \; -exec perl -i -pe"s/` + searchStr + `/` + replaceStr + `/g" {} \;`
-			//\; -exec /usr/bin/perl -i -pe\"s/` + searchStr + `/` + replaceStr + `/g\" {} \;`
+			searchStr := "docker.artifactory.solidfire.net"
+			replaceStr := "DOCKER.SOLIDFIRE.NET"
+
+			// Execute replace
+			sar := `find . -path ./.git -prune -o -type f -print  -exec grep -Iq . {} \; -exec perl -i -pe"s/` +
+				searchStr + `/` + replaceStr + `/g" {} \;`
+
+			// Print lines to be substituted only
+			//sar := `find . -path ./.git -prune -o -type f -print -exec grep -Iq . {} \; -exec perl -ne" print if s/` +
+			//	searchStr + `/` + replaceStr + `/g" {} \;`
 
 			sarExec := exec.Command("bash", "-c", sar)
 			sarExec.Dir = dirRepo
@@ -143,12 +141,21 @@ func main() {
 				panic(err)
 				fmt.Printf("ERROR: %v\n", err)
 			}
-			fmt.Printf(string(sarExecOut))
+			searchResult := string(sarExecOut)
+			fmt.Printf(searchResult)
 
-			//errSearchNum := repoAction(j, sar, dir+"/"+j, "", ":thumbsup:", ":thumbsdown:", ":thumbsdown:")
-			//if errSearchNum != 0 {
-			//	emoji.Printf(":poop:")
-			//}
+			gitDiffIndex := "git diff-index --quiet HEAD --"
+			errPullNum := repoAction(j, gitDiffIndex, dirOwner, "", ":question:", "", "")
+			if errPullNum != 0 {
+				// Git untracked changes exist
+				emoji.Printf(":exclamation:")
+			}
+			/*
+				errSearchNum := repoAction(j, sar, dirRepo, "", ":thumbsup:", ":thumbsdown:", ":thumbsdown:")
+				if errSearchNum != 0 {
+					emoji.Printf(":poop:")
+				}
+			*/
 
 			//walkDir(dirRepo)
 
