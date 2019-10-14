@@ -148,7 +148,7 @@ func main() {
 			errPullNum := repoAction(j, gitDiffIndex, dirOwner, "", "", "", "")
 			if errPullNum != 0 {
 				// Git untracked changes exist
-				emoji.Printf(":exclamation:")
+				emoji.Printf(":gem:")
 			}
 			/*
 				errSearchNum := repoAction(j, sar, dirRepo, "", ":thumbsup:", ":thumbsdown:", ":thumbsdown:")
