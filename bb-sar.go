@@ -112,7 +112,7 @@ func main() {
 			errCloneNum := repoAction(j, gitClone, dirOwner, ":hamburger:", "", "", "")
 			if errCloneNum == 128 {
 				gitPull := "git pull"
-				errPullNum := repoAction(j, gitPull, dirOwner, "", ":fries:", ":poop:", ":thumbsdown:")
+				errPullNum := repoAction(j, gitPull, dirOwner, "", ":fries:", ":lemon:", ":lemon:")
 				if errPullNum != 0 {
 					emoji.Printf(":poop:")
 				}
@@ -145,7 +145,7 @@ func main() {
 			fmt.Printf(searchResult)
 
 			gitDiffIndex := "git diff-index --quiet HEAD --"
-			errPullNum := repoAction(j, gitDiffIndex, dirOwner, "", ":question:", "", "")
+			errPullNum := repoAction(j, gitDiffIndex, dirOwner, "", "", "", "")
 			if errPullNum != 0 {
 				// Git untracked changes exist
 				emoji.Printf(":exclamation:")
