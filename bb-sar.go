@@ -127,12 +127,12 @@ func main() {
 			replaceStr := "DOCKER.SOLIDFIRE.NET"
 
 			// Execute replace
-			sar := `find . -path ./.git -prune -o -type f -print  -exec grep -Iq . {} \; -exec perl -i -pe"s/` +
-				searchStr + `/` + replaceStr + `/g" {} \;`
+			//sar := `find . -path ./.git -prune -o -type f -print  -exec grep -Iq . {} \; -exec perl -i -pe"s/` +
+			//	searchStr + `/` + replaceStr + `/g" {} \;`
 
 			// Print lines to be substituted only
-			//sar := `find . -path ./.git -prune -o -type f -print -exec grep -Iq . {} \; -exec perl -ne" print if s/` +
-			//	searchStr + `/` + replaceStr + `/g" {} \;`
+			sar := `find . -path ./.git -prune -o -type f -print -exec grep -Iq . {} \; -exec perl -ne" print if s/` +
+				searchStr + `/` + replaceStr + `/g" {} \;`
 
 			sarExec := exec.Command("bash", "-c", sar)
 			sarExec.Dir = dirRepo
