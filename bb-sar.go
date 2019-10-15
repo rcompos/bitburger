@@ -1,8 +1,6 @@
 package main
 
 import (
-	//"github.com/ktrysmt/go-bitbucket"
-
 	"bufio"
 	"flag"
 	"fmt"
@@ -10,7 +8,6 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -50,8 +47,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	//searchStr := "docker.artifactory.solidfire.net"
-	//replaceStr := "DOCKER.SOLIDFIRE.NET"
 	if execute == true && (searchStr == "" || replaceStr == "") {
 		fmt.Println("Must supply search string (-s) and replace string (-r)!")
 		flag.PrintDefaults()
@@ -64,7 +59,6 @@ func main() {
 
 	logsDir := "logs"
 	createDir(logsDir)
-	// Create log file
 	logFileDateFormat := "2006-01-02-150405"
 	logStamp := time.Now().Format(logFileDateFormat)
 	logfile := logsDir + "/bb-sar-" + string(logStamp) + ".log"
@@ -80,10 +74,8 @@ func main() {
 
 	color.Set(color.FgMagenta)
 	//fmt.Println(path.Base(os.Args[0]))
-	emoji.Printf("Acquiring repos for %s [ clone :hamburger: | pull :fries: | untracked :gem:]\n\n", bbOwner)
+	emoji.Printf("Acquiring repos for %s [ clone :hamburger: | pull :fries: | untracked :gem: | pull request :thumbsup: ]\n\n", bbOwner)
 	color.Unset() // Don't forget to unset
-	//greeting := ":hamburger:"
-	//emoji.Println(strings.Repeat(greeting, 20))
 	//time.Sleep(2)
 
 	opt := &bitbucket.RepositoriesOptions{}
@@ -92,18 +84,12 @@ func main() {
 
 	c := bitbucket.NewBasicAuth(bbUser, bbPassword)
 
-	//repos, err := c.Repositories.ListForAccount(opt)
+	// TODO: File cache of repos
+
 	repos, err := c.Repositories.ListForAccount(opt)
 	if err != nil {
 		panic(err)
 	}
-
-	//fmt.Println("\nt:\n", repos)
-	//fmt.Println("repos Page:", repos.Page)
-	//fmt.Println("repos Size:", repos.Size)
-	//fmt.Println("repos MaxDepth:", repos.MaxDepth)
-	//fmt.Println("repos Pagelen:", repos.Pagelen)
-	//fmt.Println("\nrepos Items:\n", repos.Items)
 
 	repositories := repos.Items
 	//fmt.Println("\nrepositories:\n", repositories)
@@ -122,6 +108,8 @@ func main() {
 
 	var wg sync.WaitGroup
 
+	// TODO: Change from waitgroup to buffered channels
+
 	//fmt.Printf("Repos:\n")
 	for i, j := range repoList {
 		wg.Add(1)
@@ -130,7 +118,7 @@ func main() {
 			defer wg.Done()
 			dirOwner := dir + "/" + owner
 			dirRepo := dir + "/" + j
-			fmt.Printf("%s\n", dirRepo)
+			//fmt.Printf("%s\n", dirRepo)
 
 			gitClone := "git clone " + BBURL + "/" + j
 			errCloneNum := repoAction(j, gitClone, dirOwner, ":hamburger:", "", "", "")
@@ -147,24 +135,19 @@ func main() {
 			branchExec := exec.Command("bash", "-c", branchCmd)
 			branchExec.Dir = dirRepo
 			branchExecOut, _ := branchExec.Output()
-			//if err != nil {
-			//	panic(err)
-			//	fmt.Printf("ERROR: %v\n", err)
-			//}
 			bResult := string(branchExecOut)
 			fmt.Printf(bResult)
 
 			upstreamCmd := "git push --set-upstream origin " + featureBranch
 			upstreamExec := exec.Command("bash", "-c", upstreamCmd)
 			upstreamExec.Dir = dirRepo
-			upstreamExecOut, _ := upstreamExec.Output()
-			upstreamResult := string(upstreamExecOut)
-			fmt.Printf(upstreamResult)
-
-			//# The following one-liner shell command will search and replace all files recursively.
-			//# DIR=.; OLD='hello'; NEW='H3110'; find $DIR -type f -print -exec grep -Iq . {} \; -exec perl -pe"s/$OLD/$NEW/g" {} \;
+			upstreamExec.Output()
+			//upstreamExecOut, _ := upstreamExec.Output()
+			//upstreamResult := string(upstreamExecOut)
+			//fmt.Printf(upstreamResult)
 
 			var sar string
+			//# One-liner shell command will search and replace all files recursively.
 			if execute == true {
 				sar = `find . -path ./.git -prune -o -type f -print  -exec grep -Iq . {} \; -exec perl -i -pe"s/` +
 					searchStr + `/` + replaceStr + `/g" {} \;`
@@ -188,7 +171,7 @@ func main() {
 				fmt.Printf(searchResult)
 			}
 
-			fmt.Println("dirRepo: ", dirRepo)
+			//fmt.Println("dirRepo: ", dirRepo)
 
 			// Check for untracked changes
 			gitDiffIndex := "git diff-index --quiet HEAD --"
@@ -202,94 +185,59 @@ func main() {
 					commitCmd := "git commit -am'Replace " + searchStr + " with " + replaceStr + "'"
 					commitExec := exec.Command("bash", "-c", commitCmd)
 					commitExec.Dir = dirRepo
-					commitExecOut, _ := commitExec.Output()
+					commitExec.Output()
+					//commitExecOut, _ := commitExec.Output()
 					//if err != nil {
 					//	panic(err)
 					//	fmt.Printf("ERROR: %v\n", err)
 					//}
-					commitResult := string(commitExecOut)
-					fmt.Printf(commitResult)
+					//commitResult := string(commitExecOut)
+					//fmt.Printf(commitResult)
 
 					pushCmd := "git push"
 					pushExec := exec.Command("bash", "-c", pushCmd)
 					pushExec.Dir = dirRepo
-					pushExecOut, _ := pushExec.Output()
+					pushExec.Output()
+					//pushExecOut, _ := pushExec.Output()
 					//if err != nil {
 					//	panic(err)
 					//	fmt.Printf("ERROR: %v\n", err)
 					//}
-					pushResult := string(pushExecOut)
-					fmt.Printf(pushResult)
+					//pushResult := string(pushExecOut)
+					//fmt.Printf(pushResult)
 
 					titlePR := "TEST-PR-TITLE " + j
 					curlPR := fmt.Sprintf("curl -v https://api.bitbucket.org/2.0/repositories/%s/pullrequests "+
 						"-u %s:%s --request POST --header 'Content-Type: application/json' "+
 						"--data '{\"title\": \"%s\", \"source\": { \"branch\": { \"name\": \"%s\" } } }'", j, user, pw, titlePR, featureBranch)
 
-					fmt.Printf("curlPR:\n%s\n", curlPR)
+					//fmt.Printf("curlPR:\n%s\n", curlPR)
 					prExec := exec.Command("bash", "-c", curlPR)
 					prExec.Dir = dirRepo
-					prExecOut, err := prExec.Output()
-					if err != nil {
-						panic(err)
-						fmt.Printf("ERROR: %v\n", err)
+					_, err := prExec.Output()
+					//prExecOut, err := prExec.Output()
+					if err == nil {
+						emoji.Printf(":thumbsup:")
 					}
-					prResult := string(prExecOut)
-					fmt.Printf(prResult)
+					//if err != nil {
+					//	panic(err)
+					//	fmt.Printf("ERROR: %v\n", err)
+					//}
+					//prResult := string(prExecOut)
+					//fmt.Printf(prResult)
 				}
 
 			}
-
-			/*
-				if createPR == true {
-					optPR := &bitbucket.PullRequestsOptions{}
-					optPR.Title = "TEST-PULL-REQUEST"
-
-					resultPR, err := c.PullRequests.Create(optPR)
-					if err != nil {
-						panic(err)
-					}
-				}
-			*/
-
-			//walkDir(dirRepo)
 
 			//fmt.Printf("%vth goroutine done.\n", i)
 		}(i, j, reposBaseDir, bbOwner, searchStr, replaceStr, createPR, bbUser, bbPassword)
 	}
 
 	wg.Wait()
-	fmt.Printf("\n\nAll goroutines complete.")
-	fmt.Println(" Goodbye world!")
+	//fmt.Printf("\n\nAll goroutines complete.")
+	fmt.Println()
 
 } //
-
-func walkDir(d string) {
-
-	var subDirToSkip = ".git"
-	//err := filepath.Walk(".",
-	err := filepath.Walk(d,
-		func(p string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			if info.IsDir() && info.Name() == subDirToSkip {
-				//fmt.Printf("skipping a dir without errors: %+v \n", info.Name())
-				return filepath.SkipDir
-			}
-			//fmt.Printf("visited file or dir: %q\n", p)
-			fmt.Printf("%s\n", p)
-
-			// Perform search
-			checkFileInfo(p)
-
-			return nil
-		})
-	if err != nil {
-		log.Println(err)
-	}
-
-}
 
 func repoAction(r string, cmdstr string, rdir string, win string, any string, fail string, fcess string) int {
 
@@ -362,20 +310,20 @@ func checkFileInfo(f string) {
 	}
 }
 
-func promptRead(m string, s string, r string) {
+func promptRead(owner string, s string, r string) {
 	reader := bufio.NewReader(os.Stdin)
 	if s == "" {
-		fmt.Printf("Git clone all %s repos.\n", m)
+		fmt.Printf("Git clone all %s repos.\n", owner)
 	} else {
-		fmt.Printf("Perform text replacement in all %s repos.\n", m)
+		fmt.Printf("Perform text replacement in all %s repos.\n", owner)
 		fmt.Printf("%s -> %s\n", s, r)
 	}
-	fmt.Printf("To continue type '%s': \n", m)
+	fmt.Printf("To continue type '%s': \n", owner)
 	text, _ := reader.ReadString('\n')
 	answer := strings.TrimRight(text, "\n")
 	//fmt.Printf("answer: %s \n", answer)
 	//if answer == "y" || answer == "Y" {
-	if answer == m {
+	if answer == owner {
 		return
 	} else {
 		//prompt2() //For recursive prompting
