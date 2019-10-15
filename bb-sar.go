@@ -3,6 +3,7 @@ package main
 import (
 	//"github.com/ktrysmt/go-bitbucket"
 
+	"bufio"
 	"flag"
 	"fmt"
 	"log"
@@ -10,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -27,17 +29,37 @@ func main() {
 
 	rand.Seed(time.Now().UnixNano())
 
-	var bbUser, bbPassword, bbOwner, bbRole string
+	var bbUser, bbPassword, bbOwner, bbRole, searchStr, replaceStr string
+	var execute, createPR bool
 	//var numWorkers int
-	flag.StringVar(&bbUser, "u", os.Getenv("BITBUCKET_USERNAME"), "Bitbucket user")
-	flag.StringVar(&bbPassword, "p", os.Getenv("BITBUCKET_PASSWORD"), "Bitbucket password")
-	flag.StringVar(&bbOwner, "o", os.Getenv("BITBUCKET_OWNER"), "Bitbucket owner")
-	flag.StringVar(&bbRole, "r", os.Getenv("BITBUCKET_ROLE"), "Bitbucket role")
+	flag.StringVar(&bbUser, "u", os.Getenv("BITBUCKET_USERNAME"), "Bitbucket user (required) (envvar BITBUCKET_USERNAME)")
+	flag.StringVar(&bbPassword, "p", os.Getenv("BITBUCKET_PASSWORD"), "Bitbucket password (required) (envvar BITBUCKET_PASSWORD)")
+	flag.StringVar(&bbOwner, "o", os.Getenv("BITBUCKET_OWNER"), "Bitbucket owner (required) (envvar BITBUCKET_OWNER)")
+	flag.StringVar(&bbRole, "e", os.Getenv("BITBUCKET_ROLE"), "Bitbucket role (envvar BITBUCKET_ROLE)")
+	flag.StringVar(&searchStr, "s", os.Getenv("BITBUCKET_SEARCH"), "Text to search for (envvar BITBUCKET_SEARCH)")
+	flag.StringVar(&replaceStr, "r", os.Getenv("BITBUCKET_REPLACE"), "Text to replace with (envvar BITBUCKET_REPLACE)")
+	flag.BoolVar(&execute, "x", false, "Execute text replace")
+	flag.BoolVar(&createPR, "c", false, "Create pull request")
 	//flag.IntVar(&numWorkers, "w", 100, "Number of worker threads")
 	flag.Parse()
 
-	if bbUser == "" || bbPassword == "" {
-		panic("Must supply user and password!")
+	if bbUser == "" || bbPassword == "" || bbOwner == "" {
+		fmt.Println("Must supply user (-u), password (-p) and owner (-o)!")
+		fmt.Println("Alternately, environmental variables can be set.")
+		flag.PrintDefaults()
+		os.Exit(1)
+	}
+
+	//searchStr := "docker.artifactory.solidfire.net"
+	//replaceStr := "DOCKER.SOLIDFIRE.NET"
+	if execute == true && (searchStr == "" || replaceStr == "") {
+		fmt.Println("Must supply search string (-s) and replace string (-r)!")
+		flag.PrintDefaults()
+		os.Exit(1)
+	}
+
+	if execute {
+		PromptRead(bbOwner, searchStr, replaceStr)
 	}
 
 	logsDir := "logs"
@@ -58,7 +80,7 @@ func main() {
 
 	color.Set(color.FgMagenta)
 	//fmt.Println(path.Base(os.Args[0]))
-	emoji.Printf("Acquiring repos for %s [ git clone :hamburger: | git pull :fries: ]\n\n", bbOwner)
+	emoji.Printf("Acquiring repos for %s [ git clone :hamburger: | git pull :fries: | untracked :gem:]\n\n", bbOwner)
 	color.Unset() // Don't forget to unset
 	//greeting := ":hamburger:"
 	//emoji.Println(strings.Repeat(greeting, 20))
@@ -104,7 +126,7 @@ func main() {
 	for i, j := range repoList {
 		wg.Add(1)
 		//fmt.Printf("%v> %v\n", i, j)
-		go func(i int, j string, dir string, owner string) {
+		go func(i int, j string, dir string, owner string, searchStr string, replaceStr string, createPR bool, c *bitbucket.Client) {
 			defer wg.Done()
 			dirOwner := dir + "/" + owner
 			gitClone := "git clone " + BBURL + "/" + j
@@ -122,45 +144,57 @@ func main() {
 
 			dirRepo := dir + "/" + j
 			fmt.Printf("%s\n", dirRepo)
-			searchStr := "docker.artifactory.solidfire.net"
-			replaceStr := "DOCKER.SOLIDFIRE.NET"
 
-			// Execute replace
-			//sar := `find . -path ./.git -prune -o -type f -print  -exec grep -Iq . {} \; -exec perl -i -pe"s/` +
-			//	searchStr + `/` + replaceStr + `/g" {} \;`
-
-			// Print lines to be substituted only
-			sar := `find . -path ./.git -prune -o -type f -print -exec grep -Iq . {} \; -exec perl -ne" print if s/` +
-				searchStr + `/` + replaceStr + `/g" {} \;`
-
-			sarExec := exec.Command("bash", "-c", sar)
-			sarExec.Dir = dirRepo
-			sarExecOut, err := sarExec.Output()
-			if err != nil {
-				panic(err)
-				fmt.Printf("ERROR: %v\n", err)
+			var sar string
+			if execute == true {
+				sar = `find . -path ./.git -prune -o -type f -print  -exec grep -Iq . {} \; -exec perl -i -pe"s/` +
+					searchStr + `/` + replaceStr + `/g" {} \;`
+			} else if searchStr != "" && replaceStr != "" {
+				sar = `find . -path ./.git -prune -o -type f -print -exec grep -Iq . {} \; -exec perl -ne" print if s/` +
+					searchStr + `/` + replaceStr + `/g" {} \;`
+			} else if searchStr != "" {
+				sar = `find . -path ./.git -prune -o -type f -print -exec grep -Iq . {} \; -exec perl -ne" print if /` +
+					searchStr + `/g" {} \;`
 			}
-			searchResult := string(sarExecOut)
-			fmt.Printf(searchResult)
 
+			if sar != "" {
+				sarExec := exec.Command("bash", "-c", sar)
+				sarExec.Dir = dirRepo
+				sarExecOut, err := sarExec.Output()
+				if err != nil {
+					panic(err)
+					fmt.Printf("ERROR: %v\n", err)
+				}
+				searchResult := string(sarExecOut)
+				fmt.Printf(searchResult)
+			}
+
+			// Check for untracked changes
 			gitDiffIndex := "git diff-index --quiet HEAD --"
 			errPullNum := repoAction(j, gitDiffIndex, dirOwner, "", "", "", "")
 			if errPullNum != 0 {
 				// Git untracked changes exist
 				emoji.Printf(":gem:")
+				// create Pull Request
+
+				/*
+					if createPR == true {
+						optPR := &bitbucket.PullRequestsOptions{}
+						optPR.Title = "TEST-PULL-REQUEST"
+
+						resultPR, err := c.PullRequests.Create(optPR)
+						if err != nil {
+							panic(err)
+						}
+					}
+				*/
+
 			}
-			/*
-				errSearchNum := repoAction(j, sar, dirRepo, "", ":thumbsup:", ":thumbsdown:", ":thumbsdown:")
-				if errSearchNum != 0 {
-					emoji.Printf(":poop:")
-				}
-			*/
 
 			//walkDir(dirRepo)
 
 			//fmt.Printf("%vth goroutine done.\n", i)
-			//}(i, j, reposBaseDir+"/"+bbOwner)
-		}(i, j, reposBaseDir, bbOwner)
+		}(i, j, reposBaseDir, bbOwner, searchStr, replaceStr, createPR, c)
 	}
 
 	wg.Wait()
@@ -264,5 +298,26 @@ func checkFileInfo(f string) {
 		fmt.Println("symbolic link")
 	case mode&os.ModeNamedPipe != 0:
 		fmt.Println("named pipe")
+	}
+}
+
+func PromptRead(m string, s string, r string) {
+	reader := bufio.NewReader(os.Stdin)
+	if s == "" {
+		fmt.Printf("Git clone all %s repos.\n", m)
+	} else {
+		fmt.Printf("Perform text replacement in all %s repos.\n", m)
+		fmt.Printf("%s -> %s\n", s, r)
+	}
+	fmt.Printf("To continue type '%s': \n", m)
+	text, _ := reader.ReadString('\n')
+	answer := strings.TrimRight(text, "\n")
+	//fmt.Printf("answer: %s \n", answer)
+	//if answer == "y" || answer == "Y" {
+	if answer == m {
+		return
+	} else {
+		//prompt2() //For recursive prompting
+		log.Fatal("Exiting without action.")
 	}
 }
