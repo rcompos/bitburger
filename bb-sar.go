@@ -18,27 +18,34 @@ import (
 	"github.com/rcompos/go-bitbucket"
 )
 
-const BBURL = "https://bitbucket.org"
-
 //const sleepytime time.Duration = 2
 
 func main() {
 
 	rand.Seed(time.Now().UnixNano())
 
-	var bbUser, bbPassword, bbOwner, bbRole, searchStr, replaceStr string
-	var execute, createPR bool
+	var bbUser, bbPassword, bbOwner, bbRole, searchStr, replaceStr, inFile, outFile, branch, prTitle string
+	var execute, createPR, listOnly bool
 	//var numWorkers int
+
 	flag.StringVar(&bbUser, "u", os.Getenv("BITBUCKET_USERNAME"), "Bitbucket user (required) (envvar BITBUCKET_USERNAME)")
 	flag.StringVar(&bbPassword, "p", os.Getenv("BITBUCKET_PASSWORD"), "Bitbucket password (required) (envvar BITBUCKET_PASSWORD)")
 	flag.StringVar(&bbOwner, "o", os.Getenv("BITBUCKET_OWNER"), "Bitbucket owner (required) (envvar BITBUCKET_OWNER)")
 	flag.StringVar(&bbRole, "e", os.Getenv("BITBUCKET_ROLE"), "Bitbucket role (envvar BITBUCKET_ROLE)")
 	flag.StringVar(&searchStr, "s", os.Getenv("BITBUCKET_SEARCH"), "Text to search for (envvar BITBUCKET_SEARCH)")
 	flag.StringVar(&replaceStr, "r", os.Getenv("BITBUCKET_REPLACE"), "Text to replace with (envvar BITBUCKET_REPLACE)")
+	flag.StringVar(&branch, "b", os.Getenv("BITBUCKET_BRANCH"), "Feature branch where changes are made (envvar BITBUCKET_BRANCH)")
+	flag.StringVar(&prTitle, "t", os.Getenv("BITBUCKET_TITLE"), "Title for pull request (envvar BITBUCKET_PRTITLE)")
+	flag.StringVar(&inFile, "i", "", "Input file")
+	flag.StringVar(&outFile, "f", "./files/out.txt", "Output file")
 	flag.BoolVar(&execute, "x", false, "Execute text replace")
 	flag.BoolVar(&createPR, "c", false, "Create pull request")
+	flag.BoolVar(&listOnly, "l", false, "Return repo list only")
 	//flag.IntVar(&numWorkers, "w", 100, "Number of worker threads")
 	flag.Parse()
+
+	bbURL := "https://" + bbUser + ":" + bbPassword + "@bitbucket.org"
+	var repoCache []string
 
 	if bbUser == "" || bbPassword == "" || bbOwner == "" {
 		fmt.Println("Must supply user (-u), password (-p) and owner (-o)!")
@@ -53,7 +60,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if execute {
+	if execute && !listOnly { // skip if listOnly
 		promptRead(bbOwner, searchStr, replaceStr)
 	}
 
@@ -72,10 +79,7 @@ func main() {
 
 	log.Printf("Current Unix Time: %v\n", time.Now().Unix())
 
-	color.Set(color.FgMagenta)
 	//fmt.Println(path.Base(os.Args[0]))
-	emoji.Printf("Acquiring repos for %s [ clone :hamburger: | pull :fries: | untracked :gem: | pull request :thumbsup: ]\n\n", bbOwner)
-	color.Unset() // Don't forget to unset
 	//time.Sleep(2)
 
 	opt := &bitbucket.RepositoriesOptions{}
@@ -84,27 +88,47 @@ func main() {
 
 	c := bitbucket.NewBasicAuth(bbUser, bbPassword)
 
-	// TODO: File cache of repos
+	var repos *bitbucket.RepositoriesRes
+	var repoList []string
 
-	repos, err := c.Repositories.ListForAccount(opt)
-	if err != nil {
-		panic(err)
+	if _, err := os.Stat(inFile); err == nil && inFile != "" {
+		// inFile exists, use it
+		//fmt.Printf("inFile found! %v\n", inFile)
+		readDiskCache(&repoCache, inFile)
+		//reps := []string{}
+		//reps = repoCache
+		//fmt.Printf("Repos:\n")
+		for _, j := range repoCache {
+			//fmt.Printf(">>  i: %v   j: %v\n", i, j)
+			repoList = append(repoList, j)
+		}
+	} else {
+		//  If inFile not exist, then request from BB API
+		repos, err = c.Repositories.ListForAccount(opt)
+		if err != nil {
+			panic(err)
+		}
+		repositories := repos.Items
+		for _, v := range repositories {
+			repoList = append(repoList, v.Full_name)
+		}
 	}
 
-	repositories := repos.Items
-	//fmt.Println("\nrepositories:\n", repositories)
+	writeDiskCache(&repoList, outFile)
+
+	if listOnly {
+		for _, j := range repoList {
+			fmt.Println(j)
+		}
+		os.Exit(0)
+	}
+
+	color.Set(color.FgMagenta)
+	emoji.Printf("Acquiring repos for %s [ clone :hamburger: | pull :fries: | untracked :gem: | pull request :thumbsup: ]\n\n", bbOwner)
+	color.Unset() // Don't forget to unset
 
 	reposBaseDir := "repos"
 	createDir(fmt.Sprintf("%s/%s", reposBaseDir, bbOwner))
-
-	var repoList []string
-	//for k, v := range repositories {
-	for _, v := range repositories {
-		//fmt.Println("\nk: %v	v: %v\n", k, v)
-		//fmt.Printf("> %v  name:  %v\n", k, v.Full_name)
-		repoList = append(repoList, v.Full_name)
-		//fmt.Printf("> %v\nlinks: %v\n", k, v.Links)
-	}
 
 	var wg sync.WaitGroup
 
@@ -114,52 +138,72 @@ func main() {
 	for i, j := range repoList {
 		wg.Add(1)
 		//fmt.Printf("%v> %v\n", i, j)
-		go func(i int, j string, dir string, owner string, searchStr string, replaceStr string, createPR bool, user string, pw string) {
+		go func(i int, createPR bool, j, dir, owner, search, replace, user, pw, fBranch, pr, url string) {
+			//go func(i int, j string, dir string, owner string, search string, replace string, createPR bool, user string, pw string) {
 			defer wg.Done()
 			dirOwner := dir + "/" + owner
 			dirRepo := dir + "/" + j
-			//fmt.Printf("%s\n", dirRepo)
+			fmt.Printf("%s/%s\n", url, j)
 
-			gitClone := "git clone " + BBURL + "/" + j
+			gitClone := "git clone " + url + "/" + j
 			errCloneNum := repoAction(j, gitClone, dirOwner, ":hamburger:", "", "", "")
 			if errCloneNum == 128 {
-				gitPull := "git pull"
+
+				gitPullOrigin := "git pull origin `git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@' master`"
+				errPullOriginNum := repoAction(j, gitPullOrigin, dirRepo, ":fire:", "", "", "")
+				if errPullOriginNum != 0 {
+					emoji.Printf(":fire:")
+				}
+
+				//gitPull := "git pull"
+				gitPull := "git branch --set-upstream-to=origin/" + fBranch + " " + fBranch
 				errPullNum := repoAction(j, gitPull, dirRepo, ":fries:", "", "", "")
+				if errPullNum == 1 {
+					upstreamCmd := "git push --set-upstream origin " + fBranch
+					upstreamExec := exec.Command("bash", "-c", upstreamCmd)
+					upstreamExec.Dir = dirRepo
+					upstreamExec.Output()
+					upstreamExecOut, _ := upstreamExec.Output()
+					upstreamResult := string(upstreamExecOut)
+					fmt.Printf(">> upstreamResult: %v\n", upstreamResult)
+				}
 				if errPullNum != 0 {
 					emoji.Printf(":fork_and_knife:")
 				}
 			}
 
-			featureBranch := "sf-artifactory-solidfire-net"
-			branchCmd := "git checkout -b " + featureBranch
+			branchCmd := "git checkout -b " + fBranch
+			fmt.Printf("> %v\n", branchCmd)
 			branchExec := exec.Command("bash", "-c", branchCmd)
 			branchExec.Dir = dirRepo
 			branchExecOut, _ := branchExec.Output()
 			bResult := string(branchExecOut)
 			fmt.Printf(bResult)
 
-			upstreamCmd := "git push --set-upstream origin " + featureBranch
+			upstreamCmd := "git push --set-upstream origin " + fBranch
+			fmt.Printf("> %v\n", upstreamCmd)
 			upstreamExec := exec.Command("bash", "-c", upstreamCmd)
 			upstreamExec.Dir = dirRepo
 			upstreamExec.Output()
-			//upstreamExecOut, _ := upstreamExec.Output()
-			//upstreamResult := string(upstreamExecOut)
-			//fmt.Printf(upstreamResult)
+			upstreamExecOut, _ := upstreamExec.Output()
+			upstreamResult := string(upstreamExecOut)
+			fmt.Printf(upstreamResult)
 
 			var sar string
 			//# One-liner shell command will search and replace all files recursively.
 			if execute == true {
 				sar = `find . -path ./.git -prune -o -type f -print  -exec grep -Iq . {} \; -exec perl -i -pe"s/` +
-					searchStr + `/` + replaceStr + `/g" {} \;`
-			} else if searchStr != "" && replaceStr != "" {
+					search + `/` + replace + `/g" {} \;`
+			} else if search != "" && replace != "" {
 				sar = `find . -path ./.git -prune -o -type f -print -exec grep -Iq . {} \; -exec perl -ne" print if s/` +
-					searchStr + `/` + replaceStr + `/g" {} \;`
-			} else if searchStr != "" {
+					search + `/` + replace + `/g" {} \;`
+			} else if search != "" {
 				sar = `find . -path ./.git -prune -o -type f -print -exec grep -Iq . {} \; -exec perl -ne" print if /` +
-					searchStr + `/g" {} \;`
+					search + `/g" {} \;`
 			}
 
 			if sar != "" {
+				fmt.Printf("> %v\n", sar)
 				sarExec := exec.Command("bash", "-c", sar)
 				sarExec.Dir = dirRepo
 				sarExecOut, err := sarExec.Output()
@@ -172,7 +216,6 @@ func main() {
 			}
 
 			//fmt.Println("dirRepo: ", dirRepo)
-
 			// Check for untracked changes
 			gitDiffIndex := "git diff-index --quiet HEAD --"
 			errPullNum := repoAction(j, gitDiffIndex, dirRepo, "", "", "", "")
@@ -182,40 +225,42 @@ func main() {
 				// create Pull Request
 
 				if createPR == true {
-					commitCmd := "git commit -am'Replace " + searchStr + " with " + replaceStr + "'"
+					commitCmd := "git commit -am'Replace " + search + " with " + replace + "'"
+					fmt.Printf("> %v", commitCmd)
 					commitExec := exec.Command("bash", "-c", commitCmd)
 					commitExec.Dir = dirRepo
 					commitExec.Output()
-					//commitExecOut, _ := commitExec.Output()
+					commitExecOut, _ := commitExec.Output()
 					//if err != nil {
 					//	panic(err)
 					//	fmt.Printf("ERROR: %v\n", err)
 					//}
-					//commitResult := string(commitExecOut)
-					//fmt.Printf(commitResult)
+					commitResult := string(commitExecOut)
+					fmt.Printf(commitResult)
 
 					pushCmd := "git push"
+					fmt.Printf("> %v", pushCmd)
 					pushExec := exec.Command("bash", "-c", pushCmd)
 					pushExec.Dir = dirRepo
 					pushExec.Output()
-					//pushExecOut, _ := pushExec.Output()
+					pushExecOut, _ := pushExec.Output()
 					//if err != nil {
 					//	panic(err)
 					//	fmt.Printf("ERROR: %v\n", err)
 					//}
-					//pushResult := string(pushExecOut)
-					//fmt.Printf(pushResult)
+					pushResult := string(pushExecOut)
+					fmt.Printf(pushResult)
 
-					titlePR := "TEST-PR-TITLE " + j
+					titlePR := pr + "-" + j
 					curlPR := fmt.Sprintf("curl -v https://api.bitbucket.org/2.0/repositories/%s/pullrequests "+
 						"-u %s:%s --request POST --header 'Content-Type: application/json' "+
-						"--data '{\"title\": \"%s\", \"source\": { \"branch\": { \"name\": \"%s\" } } }'", j, user, pw, titlePR, featureBranch)
+						"--data '{\"title\": \"%s\", \"source\": { \"branch\": { \"name\": \"%s\" } } }'", j, user, pw, titlePR, fBranch)
 
 					//fmt.Printf("curlPR:\n%s\n", curlPR)
 					prExec := exec.Command("bash", "-c", curlPR)
 					prExec.Dir = dirRepo
 					_, err := prExec.Output()
-					//prExecOut, err := prExec.Output()
+					prExecOut, err := prExec.Output()
 					if err == nil {
 						emoji.Printf(":thumbsup:")
 					}
@@ -223,14 +268,13 @@ func main() {
 					//	panic(err)
 					//	fmt.Printf("ERROR: %v\n", err)
 					//}
-					//prResult := string(prExecOut)
-					//fmt.Printf(prResult)
+					prResult := string(prExecOut)
+					fmt.Printf(prResult)
 				}
 
 			}
-
 			//fmt.Printf("%vth goroutine done.\n", i)
-		}(i, j, reposBaseDir, bbOwner, searchStr, replaceStr, createPR, bbUser, bbPassword)
+		}(i, createPR, j, reposBaseDir, bbOwner, searchStr, replaceStr, bbUser, bbPassword, branch, prTitle, bbURL)
 	}
 
 	wg.Wait()
@@ -239,9 +283,10 @@ func main() {
 
 } //
 
-func repoAction(r string, cmdstr string, rdir string, win string, any string, fail string, fcess string) int {
+func repoAction(r, cmdstr, rdir, win, any, fail, fcess string) int {
 
 	cmd := exec.Command("bash", "-c", cmdstr)
+	fmt.Printf("cmd> %s\n", cmd)
 	cmd.Dir = rdir
 
 	var errorNumber int = 0
@@ -329,4 +374,48 @@ func promptRead(owner string, s string, r string) {
 		//prompt2() //For recursive prompting
 		log.Fatal("Exiting without action.")
 	}
+}
+
+func readDiskCache(c *[]string, cf string) {
+	//fmt.Println("Reading cache from disk: ", cf)
+	var lines []string
+	lines = readInFile(cf)
+	for _, v := range lines {
+		(*c) = append(*c, v)
+	}
+}
+
+func writeDiskCache(c *[]string, cf string) {
+	// If the file doesn't exist, create it, or append to the file
+	//f, err := os.OpenFile(cf, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(cf, os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, w := range *c {
+		outString := fmt.Sprintf("%v\n", w)
+		if _, err := f.WriteString(outString); err != nil {
+			log.Println(err)
+		}
+	}
+	if err := f.Close(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func readInFile(i string) []string {
+	// Read line-by-line
+	var lines []string
+	file, err := os.Open(i)
+	if err != nil {
+		log.Println(err)
+		return lines
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	scanner.Split(bufio.ScanLines)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+	return lines
 }
