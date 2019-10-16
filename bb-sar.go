@@ -145,134 +145,155 @@ func main() {
 			dirRepo := dir + "/" + j
 			fmt.Printf("%s/%s\n", url, j)
 
-			gitClone := "git clone " + url + "/" + j
-			errCloneNum := repoAction(j, gitClone, dirOwner, ":hamburger:", "", "", "")
-			if errCloneNum == 128 {
-
-				gitPullOrigin := "git pull origin `git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@' master`"
-				errPullOriginNum := repoAction(j, gitPullOrigin, dirRepo, ":fire:", "", "", "")
-				if errPullOriginNum != 0 {
-					emoji.Printf(":fire:")
-				}
-
-				//gitPull := "git pull"
-				gitPull := "git branch --set-upstream-to=origin/" + fBranch + " " + fBranch
-				errPullNum := repoAction(j, gitPull, dirRepo, ":fries:", "", "", "")
-				if errPullNum == 1 {
-					upstreamCmd := "git push --set-upstream origin " + fBranch
-					upstreamExec := exec.Command("bash", "-c", upstreamCmd)
-					upstreamExec.Dir = dirRepo
-					upstreamExec.Output()
-					upstreamExecOut, _ := upstreamExec.Output()
-					upstreamResult := string(upstreamExecOut)
-					fmt.Printf(">> upstreamResult: %v\n", upstreamResult)
-				}
-				if errPullNum != 0 {
-					emoji.Printf(":fork_and_knife:")
-				}
+			// add check for lines starting with #
+			if strings.HasPrefix(j, "#") {
+				fmt.Printf("Skipping: %v\n", j)
 			}
 
-			branchCmd := "git checkout -b " + fBranch
-			fmt.Printf("> %v\n", branchCmd)
-			branchExec := exec.Command("bash", "-c", branchCmd)
-			branchExec.Dir = dirRepo
-			branchExecOut, _ := branchExec.Output()
-			bResult := string(branchExecOut)
-			fmt.Printf(bResult)
+			repoSCM := "curl --user " + user + ":" + pw + " https://api.bitbucket.org/2.0/repositories/" + j + `| jq | grep '\"scm\":' | perl -pe's/^\s*\"scm\": "(\S+)"\,\s*$/$1/'`
+			//fmt.Printf("repoSCM: %v\n", repoSCM)
+			repoSCMExec := exec.Command("bash", "-c", repoSCM)
+			repoSCMExec.Dir = dirOwner
+			repoSCMExecOut, _ := repoSCMExec.Output()
+			scm := string(repoSCMExecOut)
+			//fmt.Printf("SCM: '%v'\n", scm)
 
-			upstreamCmd := "git push --set-upstream origin " + fBranch
-			fmt.Printf("> %v\n", upstreamCmd)
-			upstreamExec := exec.Command("bash", "-c", upstreamCmd)
-			upstreamExec.Dir = dirRepo
-			upstreamExec.Output()
-			upstreamExecOut, _ := upstreamExec.Output()
-			upstreamResult := string(upstreamExecOut)
-			fmt.Printf(upstreamResult)
+			if scm == "git" {
 
-			var sar string
-			//# One-liner shell command will search and replace all files recursively.
-			if execute == true {
-				sar = `find . -path ./.git -prune -o -type f -print  -exec grep -Iq . {} \; -exec perl -i -pe"s/` +
-					search + `/` + replace + `/g" {} \;`
-			} else if search != "" && replace != "" {
-				sar = `find . -path ./.git -prune -o -type f -print -exec grep -Iq . {} \; -exec perl -ne" print if s/` +
-					search + `/` + replace + `/g" {} \;`
-			} else if search != "" {
-				sar = `find . -path ./.git -prune -o -type f -print -exec grep -Iq . {} \; -exec perl -ne" print if /` +
-					search + `/g" {} \;`
-			}
+				gitClone := "git clone " + url + "/" + j
+				errCloneNum := repoAction(j, gitClone, dirOwner, ":hamburger:", "", "", "")
+				if errCloneNum == 128 {
 
-			if sar != "" {
-				fmt.Printf("> %v\n", sar)
-				sarExec := exec.Command("bash", "-c", sar)
-				sarExec.Dir = dirRepo
-				sarExecOut, err := sarExec.Output()
-				if err != nil {
-					panic(err)
-					fmt.Printf("ERROR: %v\n", err)
-				}
-				searchResult := string(sarExecOut)
-				fmt.Printf(searchResult)
-			}
-
-			//fmt.Println("dirRepo: ", dirRepo)
-			// Check for untracked changes
-			gitDiffIndex := "git diff-index --quiet HEAD --"
-			errPullNum := repoAction(j, gitDiffIndex, dirRepo, "", "", "", "")
-			if errPullNum != 0 {
-				// Git untracked changes exist
-				emoji.Printf(":gem:")
-				// create Pull Request
-
-				if createPR == true {
-					commitCmd := "git commit -am'Replace " + search + " with " + replace + "'"
-					fmt.Printf("> %v", commitCmd)
-					commitExec := exec.Command("bash", "-c", commitCmd)
-					commitExec.Dir = dirRepo
-					commitExec.Output()
-					commitExecOut, _ := commitExec.Output()
-					//if err != nil {
-					//	panic(err)
-					//	fmt.Printf("ERROR: %v\n", err)
-					//}
-					commitResult := string(commitExecOut)
-					fmt.Printf(commitResult)
-
-					pushCmd := "git push"
-					fmt.Printf("> %v", pushCmd)
-					pushExec := exec.Command("bash", "-c", pushCmd)
-					pushExec.Dir = dirRepo
-					pushExec.Output()
-					pushExecOut, _ := pushExec.Output()
-					//if err != nil {
-					//	panic(err)
-					//	fmt.Printf("ERROR: %v\n", err)
-					//}
-					pushResult := string(pushExecOut)
-					fmt.Printf(pushResult)
-
-					titlePR := pr + "-" + j
-					curlPR := fmt.Sprintf("curl -v https://api.bitbucket.org/2.0/repositories/%s/pullrequests "+
-						"-u %s:%s --request POST --header 'Content-Type: application/json' "+
-						"--data '{\"title\": \"%s\", \"source\": { \"branch\": { \"name\": \"%s\" } } }'", j, user, pw, titlePR, fBranch)
-
-					//fmt.Printf("curlPR:\n%s\n", curlPR)
-					prExec := exec.Command("bash", "-c", curlPR)
-					prExec.Dir = dirRepo
-					_, err := prExec.Output()
-					prExecOut, err := prExec.Output()
-					if err == nil {
-						emoji.Printf(":thumbsup:")
+					gitPullOrigin := "git pull origin `git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@' master`"
+					errPullOriginNum := repoAction(j, gitPullOrigin, dirRepo, ":fire:", "", "", "")
+					if errPullOriginNum != 0 {
+						emoji.Printf(":fire:")
 					}
-					//if err != nil {
-					//	panic(err)
-					//	fmt.Printf("ERROR: %v\n", err)
-					//}
-					prResult := string(prExecOut)
-					fmt.Printf(prResult)
+
+					//gitPull := "git pull"
+					gitPull := "git branch --set-upstream-to=origin/" + fBranch + " " + fBranch
+					errPullNum := repoAction(j, gitPull, dirRepo, ":fries:", "", "", "")
+					if errPullNum == 1 {
+						upstreamCmd := "git push --set-upstream origin " + fBranch
+						upstreamExec := exec.Command("bash", "-c", upstreamCmd)
+						upstreamExec.Dir = dirRepo
+						upstreamExec.Output()
+						upstreamExecOut, _ := upstreamExec.Output()
+						upstreamResult := string(upstreamExecOut)
+						fmt.Printf(">> upstreamResult: %v\n", upstreamResult)
+					}
+					if errPullNum != 0 {
+						emoji.Printf(":fork_and_knife:")
+					}
 				}
 
+				branchCmd := "git checkout -b " + fBranch
+				fmt.Printf("> %v\n", branchCmd)
+				branchExec := exec.Command("bash", "-c", branchCmd)
+				branchExec.Dir = dirRepo
+				branchExecOut, _ := branchExec.Output()
+				bResult := string(branchExecOut)
+				fmt.Printf(bResult)
+
+				upstreamCmd := "git push --set-upstream origin " + fBranch
+				fmt.Printf("> %v\n", upstreamCmd)
+				upstreamExec := exec.Command("bash", "-c", upstreamCmd)
+				upstreamExec.Dir = dirRepo
+				upstreamExec.Output()
+				upstreamExecOut, _ := upstreamExec.Output()
+				upstreamResult := string(upstreamExecOut)
+				fmt.Printf(upstreamResult)
+
+				var sar string
+				//# One-liner shell command will search and replace all files recursively.
+				if execute == true {
+					sar = `find . -path ./.git -prune -o -type f -print  -exec grep -Iq . {} \; -exec perl -i -pe"s/` +
+						search + `/` + replace + `/g" {} \;`
+				} else if search != "" && replace != "" {
+					sar = `find . -path ./.git -prune -o -type f -print -exec grep -Iq . {} \; -exec perl -ne" print if s/` +
+						search + `/` + replace + `/g" {} \;`
+				} else if search != "" {
+					sar = `find . -path ./.git -prune -o -type f -print -exec grep -Iq . {} \; -exec perl -ne" print if /` +
+						search + `/g" {} \;`
+				}
+
+				if sar != "" {
+					fmt.Printf("> %v\n", sar)
+					sarExec := exec.Command("bash", "-c", sar)
+					sarExec.Dir = dirRepo
+					sarExecOut, err := sarExec.Output()
+					if err != nil {
+						panic(err)
+						fmt.Printf("ERROR: %v\n", err)
+					}
+					searchResult := string(sarExecOut)
+					fmt.Printf(searchResult)
+				}
+
+				//fmt.Println("dirRepo: ", dirRepo)
+				// Check for untracked changes
+				gitDiffIndex := "git diff-index --quiet HEAD --"
+				errPullNum := repoAction(j, gitDiffIndex, dirRepo, "", "", "", "")
+				if errPullNum != 0 {
+					// Git untracked changes exist
+					emoji.Printf(":gem:")
+					// create Pull Request
+
+					if createPR == true {
+						commitCmd := "git commit -am'Replace " + search + " with " + replace + "'"
+						fmt.Printf("> %v", commitCmd)
+						commitExec := exec.Command("bash", "-c", commitCmd)
+						commitExec.Dir = dirRepo
+						commitExec.Output()
+						commitExecOut, _ := commitExec.Output()
+						//if err != nil {
+						//	panic(err)
+						//	fmt.Printf("ERROR: %v\n", err)
+						//}
+						commitResult := string(commitExecOut)
+						fmt.Printf(commitResult)
+
+						pushCmd := "git push"
+						fmt.Printf("> %v", pushCmd)
+						pushExec := exec.Command("bash", "-c", pushCmd)
+						pushExec.Dir = dirRepo
+						pushExec.Output()
+						pushExecOut, _ := pushExec.Output()
+						//if err != nil {
+						//	panic(err)
+						//	fmt.Printf("ERROR: %v\n", err)
+						//}
+						pushResult := string(pushExecOut)
+						fmt.Printf(pushResult)
+
+						titlePR := pr
+						curlPR := fmt.Sprintf("curl -v https://api.bitbucket.org/2.0/repositories/%s/pullrequests "+
+							"-u %s:%s --request POST --header 'Content-Type: application/json' "+
+							"--data '{\"title\": \"%s\", \"source\": { \"branch\": { \"name\": \"%s\" } } }'", j, user, pw, titlePR, fBranch)
+
+						//fmt.Printf("curlPR:\n%s\n", curlPR)
+						prExec := exec.Command("bash", "-c", curlPR)
+						prExec.Dir = dirRepo
+						_, err := prExec.Output()
+						prExecOut, err := prExec.Output()
+						if err == nil {
+							emoji.Printf(":thumbsup:")
+						}
+						//if err != nil {
+						//	panic(err)
+						//	fmt.Printf("ERROR: %v\n", err)
+						//}
+						prResult := string(prExecOut)
+						fmt.Printf(prResult)
+					}
+
+				}
+			} else {
+				fmt.Printf("ERROR: Unsupported SCM: %s %s\n", j, scm)
+				log.Printf("ERROR: Unsupported SCM: %s %s\n", j, scm)
 			}
+
+			// end git
 			//fmt.Printf("%vth goroutine done.\n", i)
 		}(i, createPR, j, reposBaseDir, bbOwner, searchStr, replaceStr, bbUser, bbPassword, branch, prTitle, bbURL)
 	}
