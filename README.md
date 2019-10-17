@@ -1,5 +1,13 @@
 # bb-sar
-BitBucket search and replace across all repos by owner.
+BitBucket Cloud Search and Replace.
+
+Perform actions for all repos by owner OR a list of repos (owner/repo) from input file.
+
+	* List
+	* Search
+	* Search and Replace
+	* Create Pull Requests
+
 
 Requires Go v1.13.1 or later
 
@@ -14,7 +22,7 @@ Usage of bb-sar:
   -f string
     	Output file (default "./logs/out.txt")
   -i string
-    	Input file
+      	Input file of repos (owner/repo) one per line
   -l	Return repo list only
   -o string
     	Bitbucket owner (required) (envvar BITBUCKET_OWNER)
@@ -34,25 +42,25 @@ exit status 2
 
 ### Example usage
 
-For all repos under BitBucket owner \<owner\>, search for 'docker.example.net' and replace with 'artifactory.example.net', create feature branch 'docker-to-artifactory' and create pull request with title 'HCI-5165 Artifactory Docker Registry docker.example.net -> artifactory.example.net'.
+For all repos under BitBucket Cloud owner \<owner\>, search for 'docker.example.net' and replace with 'artifactory.example.net', create feature branch 'docker-to-artifactory' and create pull request with title 'HCI-5165 Artifactory Docker Registry docker.example.net -> artifactory.example.net'.
 
 ```
 $ go run bb-sar.go -c -x -u <user> -p <password> -o <owner> -s 'docker.example.net' -r 'artifactory.example.net' -b 'docker-to-artifactory' -t 'HCI-5165 Artifactory Docker Registry docker.example.net -> artifactory.example.net'
 ```
 
-List all repos under BitBucket owner \<owner\>.
+List all repos under BitBucket Cloud owner \<owner\>.
 
 ```
 $ go run bb-sar.go -l -u <user> -p <password> -o <owner>
 ```
 
-Clone all repos under BitBucket owner \<owner\>.
+Clone all repos under BitBucket Cloud owner \<owner\>.
 
 ```
 $ go run bb-sar.go -u <user> -p <password> -o <owner>
 ```
 
-Search all repos under BitBucket owner \<owner\> for \<term\>.
+Search all repos under BitBucket Cloud owner \<owner\> for \<term\>.
 
 ```
 $ go run bb-sar.go -u <user> -p <password> -o <owner> -s <term>

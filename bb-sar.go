@@ -36,7 +36,7 @@ func main() {
 	flag.StringVar(&replaceStr, "r", os.Getenv("BITBUCKET_REPLACE"), "Text to replace with (envvar BITBUCKET_REPLACE)")
 	flag.StringVar(&branch, "b", os.Getenv("BITBUCKET_BRANCH"), "Feature branch where changes are made (envvar BITBUCKET_BRANCH)")
 	flag.StringVar(&prTitle, "t", os.Getenv("BITBUCKET_TITLE"), "Title for pull request (envvar BITBUCKET_PRTITLE)")
-	flag.StringVar(&inFile, "i", "", "Input file")
+	flag.StringVar(&inFile, "i", "", "Input file of repos (owner/repo) one per line")
 	flag.StringVar(&outFile, "f", "./logs/out.txt", "Output file")
 	flag.BoolVar(&execute, "x", false, "Execute text replace")
 	flag.BoolVar(&createPR, "c", false, "Create pull request")
