@@ -25,7 +25,7 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 
 	var bbUser, bbPassword, bbOwner, bbRole, searchStr, replaceStr, inFile, outFile, branch, prTitle string
-	var execute, createPR, listOnly bool
+	var execute, createPR, listOnly, help bool
 	//var numWorkers int
 
 	flag.StringVar(&bbUser, "u", os.Getenv("BITBUCKET_USERNAME"), "Bitbucket user (required) (envvar BITBUCKET_USERNAME)")
@@ -41,11 +41,23 @@ func main() {
 	flag.BoolVar(&execute, "x", false, "Execute text replace")
 	flag.BoolVar(&createPR, "c", false, "Create pull request")
 	flag.BoolVar(&listOnly, "l", false, "Return repo list only")
+	flag.BoolVar(&help, "h", false, "Help")
 	//flag.IntVar(&numWorkers, "w", 100, "Number of worker threads")
 	flag.Parse()
 
 	bbURL := "https://" + bbUser + ":" + bbPassword + "@bitbucket.org"
 	var repoCache []string
+
+	if help == true {
+		color.Set(color.FgYellow)
+		fmt.Printf("BitBucket Cloud Search and Replace\n\n")
+		color.Unset() // Don't forget to unset
+		color.Set(color.FgMagenta)
+		emoji.Printf("[ clone :hamburger: | pull :fries: | untracked :gem: | pull request :thumbsup: ]\n\n")
+		color.Unset() // Don't forget to unset
+		flag.PrintDefaults()
+		os.Exit(1)
+	}
 
 	if bbUser == "" || bbPassword == "" || bbOwner == "" {
 		fmt.Println("Must supply user (-u), password (-p) and owner (-o)!")
