@@ -34,7 +34,7 @@ exit status 2
 
 ### Example usage
 
-For all repos under BitBucket owner \<owner\>.
+For all repos under BitBucket owner \<owner\>, search for 'docker.example.net' and replace with 'artifactory.example.net', create feature branch 'docker-to-artifactory' and create pull request with title 'HCI-5165 Artifactory Docker Registry docker.example.net -> artifactory.example.net'.
 
 ```
 $ go run bb-sar.go -c -x -u <user> -p <password> -o <owner> -s 'docker.example.net' -r 'artifactory.example.net' -b 'docker-to-artifactory' -t 'HCI-5165 Artifactory Docker Registry docker.example.net -> artifactory.example.net'
