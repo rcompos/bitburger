@@ -1,6 +1,8 @@
 # bb-sar
 BitBucket Cloud Search and Replace.
 
+[ clone 🍔  | pull 🍟  | untracked 💎  | pull request 👍  ]
+
 Perform actions for all repos by owner OR a list of repos (owner/repo) from input file.
 
 	* List
