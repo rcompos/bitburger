@@ -1,7 +1,7 @@
 # bb-sar
 BitBucket Cloud Search and Replace.
 
-[ clone 🍔  | pull 🍟  | untracked 💎  | pull request 👍  ]
+[ 🍔  | 🍟  | 💎 | 👍  ]
 
 Perform actions for all repos by owner OR a list of repos (owner/repo) from input file.
 
@@ -14,8 +14,11 @@ Perform actions for all repos by owner OR a list of repos (owner/repo) from inpu
 Requires Go v1.13.1 or later
 
 ```
-$ go run bb-sar.go  -h
-Usage of bb-sar:
+$ go run bb-sar.go -h
+BitBucket Cloud Search and Replace
+
+[ clone 🍔  | pull 🍟  | untracked 💎  | pull request 👍  ]
+
   -b string
     	Feature branch where changes are made (envvar BITBUCKET_BRANCH)
   -c	Create pull request
@@ -23,8 +26,9 @@ Usage of bb-sar:
     	Bitbucket role (envvar BITBUCKET_ROLE)
   -f string
     	Output file (default "./logs/out.txt")
+  -h	Help
   -i string
-      	Input file of repos (owner/repo) one per line
+    	Input file of repos (owner/repo) one per line
   -l	Return repo list only
   -o string
     	Bitbucket owner (required) (envvar BITBUCKET_OWNER)
@@ -39,7 +43,6 @@ Usage of bb-sar:
   -u string
     	Bitbucket user (required) (envvar BITBUCKET_USERNAME)
   -x	Execute text replace
-exit status 2
 ```
 
 ### Example usage
