@@ -241,7 +241,7 @@ func main() {
 
 					if createPR == true {
 						commitCmd := "git commit -am'Replace " + search + " with " + replace + "'"
-						fmt.Printf("> %v", commitCmd)
+						fmt.Printf("> %v\n", commitCmd)
 						commitExec := exec.Command("bash", "-c", commitCmd)
 						commitExec.Dir = dirRepo
 						commitExec.Output()
@@ -254,7 +254,7 @@ func main() {
 						fmt.Printf(commitResult)
 
 						pushCmd := "git push"
-						fmt.Printf("> %v", pushCmd)
+						fmt.Printf("> %v\n", pushCmd)
 						pushExec := exec.Command("bash", "-c", pushCmd)
 						pushExec.Dir = dirRepo
 						pushExec.Output()
@@ -284,7 +284,7 @@ func main() {
 						//	fmt.Printf("ERROR: %v\n", err)
 						//}
 						prResult := string(prExecOut)
-						fmt.Printf(prResult)
+						fmt.Printf("PR> %v\n", prResult)
 					}
 
 				}
