@@ -14,10 +14,17 @@ Default action is to list all repos for owner.
 
 ### Requires
 
-Go v1.13.1 or later
-git, perl, jq
+Go v1.13.1 or later  
+git, perl, jq  
 
 ### Usage
+
+Make sure your git username and email are configured:
+
+```
+$ git config --global user.name "FIRST_NAME LAST_NAME"  
+$ git config --global user.email "user@example.com"  
+```
 
 ```
 $ go run bb-sar.go -h
