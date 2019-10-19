@@ -176,7 +176,7 @@ func main() {
 			//	fmt.Printf("Skipping: %v\n", j)
 			//}
 
-			repoSCM := "curl --user " + user + ":" + pw + " https://api.bitbucket.org/2.0/repositories/" + j + `| jq | grep '\"scm\":' | perl -pe's/^\s*\"scm\": "(\S+)"\,\s*$/$1/'`
+			repoSCM := "curl --user " + user + ":" + pw + " https://api.bitbucket.org/2.0/repositories/" + j + `| jq '.' | grep '\"scm\":' | perl -pe's/^\s*\"scm\": "(\S+)"\,\s*$/$1/'`
 			//fmt.Printf("repoSCM: %v\n", repoSCM)
 			color.Set(color.FgYellow)
 			fmt.Printf("> %v\n", repoSCM)

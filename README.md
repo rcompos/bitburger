@@ -12,7 +12,10 @@ Default action is to list all repos for owner.
 	* Create Pull Requests
 
 
-Requires Go v1.13.1 or later
+### Requires
+
+Go v1.13.1 or later
+git, perl, jq
 
 ### Usage
 
