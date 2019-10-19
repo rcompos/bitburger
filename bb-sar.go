@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	"path"
 	"strings"
 	"sync"
 	"syscall"
@@ -25,7 +26,7 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 
 	var bbUser, bbPassword, bbOwner, bbRole, searchStr, replaceStr, inFile, outFile, branch, prTitle string
-	var execute, createPR, listOnly, help bool
+	var execute, createPR, gitClone, help bool
 	//var numWorkers int
 
 	flag.StringVar(&bbUser, "u", os.Getenv("BITBUCKET_USERNAME"), "Bitbucket user (required) (envvar BITBUCKET_USERNAME)")
@@ -40,7 +41,7 @@ func main() {
 	flag.StringVar(&outFile, "f", "./logs/out.txt", "Output file")
 	flag.BoolVar(&execute, "x", false, "Execute text replace")
 	flag.BoolVar(&createPR, "c", false, "Create pull request")
-	flag.BoolVar(&listOnly, "l", false, "Return repo list only")
+	flag.BoolVar(&gitClone, "g", false, "Git clone repos")
 	flag.BoolVar(&help, "h", false, "Help")
 	//flag.IntVar(&numWorkers, "w", 100, "Number of worker threads")
 	flag.Parse()
@@ -51,10 +52,10 @@ func main() {
 	if help == true {
 		color.Set(color.FgYellow)
 		fmt.Printf("BitBucket Cloud Search and Replace\n\n")
-		color.Unset() // Don't forget to unset
+		color.Unset()
 		color.Set(color.FgMagenta)
-		emoji.Printf("[ clone :hamburger: | pull :fries: | untracked :gem: | pull request :thumbsup: ]\n\n")
-		color.Unset() // Don't forget to unset
+		emoji.Printf("[ clone :hamburger: | pull :fries: | untracked :gem: | pull request :fire: ]\n\n")
+		color.Unset()
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
@@ -72,15 +73,26 @@ func main() {
 		os.Exit(1)
 	}
 
-	if execute && !listOnly { // skip if listOnly
+	if execute || createPR {
 		promptRead(bbOwner, searchStr, replaceStr)
 	}
 
+	if createPR && (prTitle == "" || branch == "") {
+		fmt.Println("Must supply pull request title (-t) and feature branch name (-b)!")
+		flag.PrintDefaults()
+		os.Exit(1)
+	}
+
+	//if createPR {
+	//	execute = true
+	//}
+
+	myName := fmt.Sprintf(path.Base(os.Args[0]))
 	logsDir := "logs"
 	createDir(logsDir)
 	logFileDateFormat := "2006-01-02-150405"
 	logStamp := time.Now().Format(logFileDateFormat)
-	logfile := logsDir + "/bb-sar-" + string(logStamp) + ".log"
+	logfile := logsDir + "/" + myName + "-" + string(logStamp) + ".log"
 
 	logf, err := os.OpenFile(logfile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0664)
 	if err != nil {
@@ -90,8 +102,6 @@ func main() {
 	log.SetOutput(logf) //log.Println("Test log message")
 
 	log.Printf("Current Unix Time: %v\n", time.Now().Unix())
-
-	//fmt.Println(path.Base(os.Args[0]))
 	//time.Sleep(2)
 
 	opt := &bitbucket.RepositoriesOptions{}
@@ -128,7 +138,8 @@ func main() {
 
 	writeDiskCache(&repoList, outFile)
 
-	if listOnly {
+	if !gitClone && !execute && !createPR && searchStr == "" {
+		// List repos and exit
 		for _, j := range repoList {
 			fmt.Println(j)
 		}
@@ -136,20 +147,23 @@ func main() {
 	}
 
 	color.Set(color.FgMagenta)
-	emoji.Printf("Acquiring repos for %s [ clone :hamburger: | pull :fries: | untracked :gem: | pull request :thumbsup: ]\n\n", bbOwner)
-	color.Unset() // Don't forget to unset
+	emoji.Printf("Acquiring repos for %s [ clone :hamburger: | pull :fries: | untracked :gem: | pull request :fire: ]\n\n", bbOwner)
+	color.Unset()
 
 	reposBaseDir := "repos"
 	createDir(fmt.Sprintf("%s/%s", reposBaseDir, bbOwner))
 
 	var wg sync.WaitGroup
 
-	// TODO: Change from waitgroup to buffered channels
-
 	//fmt.Printf("Repos:\n")
+	// TODO: Change from waitgroup to buffered channels
 	for i, j := range repoList {
-		wg.Add(1)
 		//fmt.Printf("%v> %v\n", i, j)
+		if strings.HasPrefix(j, "#") {
+			fmt.Printf("Skipping: %v\n", j)
+			continue
+		}
+		wg.Add(1)
 		go func(i int, createPR bool, j, dir, owner, search, replace, user, pw, fBranch, pr, url string) {
 			//go func(i int, j string, dir string, owner string, search string, replace string, createPR bool, user string, pw string) {
 			defer wg.Done()
@@ -158,12 +172,15 @@ func main() {
 			fmt.Printf("%s/%s\n", url, j)
 
 			// add check for lines starting with #
-			if strings.HasPrefix(j, "#") {
-				fmt.Printf("Skipping: %v\n", j)
-			}
+			//if strings.HasPrefix(j, "#") {
+			//	fmt.Printf("Skipping: %v\n", j)
+			//}
 
 			repoSCM := "curl --user " + user + ":" + pw + " https://api.bitbucket.org/2.0/repositories/" + j + `| jq | grep '\"scm\":' | perl -pe's/^\s*\"scm\": "(\S+)"\,\s*$/$1/'`
 			//fmt.Printf("repoSCM: %v\n", repoSCM)
+			color.Set(color.FgYellow)
+			fmt.Printf("> %v\n", repoSCM)
+			color.Unset()
 			repoSCMExec := exec.Command("bash", "-c", repoSCM)
 			repoSCMExec.Dir = dirOwner
 			repoSCMExecOut, _ := repoSCMExec.Output()
@@ -173,20 +190,23 @@ func main() {
 			if scm == "git" {
 
 				gitClone := "git clone " + url + "/" + j
-				errCloneNum := repoAction(j, gitClone, dirOwner, ":hamburger:", "", "", "")
+				errCloneNum := doIt(gitClone, dirOwner, ":hamburger:", "", "", "")
 				if errCloneNum == 128 {
 
 					gitPullOrigin := "git pull origin `git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@' master`"
-					errPullOriginNum := repoAction(j, gitPullOrigin, dirRepo, ":fire:", "", "", "")
+					errPullOriginNum := doIt(gitPullOrigin, dirRepo, "", "", "", "")
 					if errPullOriginNum != 0 {
-						emoji.Printf(":fire:")
+						emoji.Printf(":poop:")
 					}
 
 					//gitPull := "git pull"
 					gitPull := "git branch --set-upstream-to=origin/" + fBranch + " " + fBranch
-					errPullNum := repoAction(j, gitPull, dirRepo, ":fries:", "", "", "")
+					errPullNum := doIt(gitPull, dirRepo, ":fries:", "", "", "")
 					if errPullNum == 1 {
 						upstreamCmd := "git push --set-upstream origin " + fBranch
+						color.Set(color.FgYellow)
+						fmt.Printf("> %v\n", upstreamCmd)
+						color.Unset()
 						upstreamExec := exec.Command("bash", "-c", upstreamCmd)
 						upstreamExec.Dir = dirRepo
 						upstreamExec.Output()
@@ -200,7 +220,9 @@ func main() {
 				}
 
 				branchCmd := "git checkout -b " + fBranch
+				color.Set(color.FgYellow)
 				fmt.Printf("> %v\n", branchCmd)
+				color.Unset()
 				branchExec := exec.Command("bash", "-c", branchCmd)
 				branchExec.Dir = dirRepo
 				branchExecOut, _ := branchExec.Output()
@@ -208,7 +230,9 @@ func main() {
 				fmt.Printf(bResult)
 
 				upstreamCmd := "git push --set-upstream origin " + fBranch
+				color.Set(color.FgYellow)
 				fmt.Printf("> %v\n", upstreamCmd)
+				color.Unset()
 				upstreamExec := exec.Command("bash", "-c", upstreamCmd)
 				upstreamExec.Dir = dirRepo
 				upstreamExec.Output()
@@ -230,8 +254,10 @@ func main() {
 				}
 
 				if sar != "" {
-					fmt.Printf("> %v\n", sar)
 					sarExec := exec.Command("bash", "-c", sar)
+					color.Set(color.FgYellow)
+					fmt.Printf("> %v\n", sar)
+					color.Unset()
 					sarExec.Dir = dirRepo
 					sarExecOut, err := sarExec.Output()
 					if err != nil {
@@ -239,21 +265,52 @@ func main() {
 						fmt.Printf("ERROR: %v\n", err)
 					}
 					searchResult := string(sarExecOut)
+					color.Set(color.FgBlue)
 					fmt.Printf(searchResult)
+					color.Unset()
 				}
 
 				//fmt.Println("dirRepo: ", dirRepo)
 				// Check for untracked changes
-				gitDiffIndex := "git diff-index --quiet HEAD --"
-				errPullNum := repoAction(j, gitDiffIndex, dirRepo, "", "", "", "")
-				if errPullNum != 0 {
+				gitDiffIndex := "git diff-index --quiet HEAD --;"
+				//gitDiffIndex := `git status -s | wc -l | perl -pe's/^\s+(\d+)\s*/$1/'`
+				errGitDiffIndex := doIt(gitDiffIndex, dirRepo, "", "", "", "")
+				fmt.Printf("errGitDiffIndex: %v\n", errGitDiffIndex)
+
+				/*
+					gitDiffIndex := "git status -s | wc -l"
+					color.Set(color.FgYellow)
+					fmt.Printf("> %v\n", gitDiffIndex)
+					color.Unset()
+					gdiExec := exec.Command("bash", "-c", gitDiffIndex)
+					gdiExec.Dir = dirRepo
+					var out bytes.Buffer
+					gdiExec.Stdout = &out
+					err := gdiExec.Run()
+					if err != nil {
+						fmt.Printf("ERROR>> '%v'\n", err)
+					}
+					fmt.Printf("--> '%v'\n", out.String())
+				*/
+
+				//gdiExecOut, gdiErr := gdiExec.Output()
+				//gdiResult := string(gdiExecOut)
+				//fmt.Printf("gdiResult: '%v'\n", gdiResult)
+				//fmt.Printf("gdiErr: '%v'\n", gdiErr)
+
+				//if gdiErr != nil {
+				if errGitDiffIndex != 0 {
+
+					//if errGitDiffIndex != 0 {
 					// Git untracked changes exist
 					emoji.Printf(":gem:")
-					// create Pull Request
 
+					// create Pull Request
 					if createPR == true {
 						commitCmd := "git commit -am'Replace " + search + " with " + replace + "'"
+						color.Set(color.FgYellow)
 						fmt.Printf("> %v\n", commitCmd)
+						color.Unset()
 						commitExec := exec.Command("bash", "-c", commitCmd)
 						commitExec.Dir = dirRepo
 						commitExec.Output()
@@ -266,7 +323,9 @@ func main() {
 						fmt.Printf(commitResult)
 
 						pushCmd := "git push"
+						color.Set(color.FgYellow)
 						fmt.Printf("> %v\n", pushCmd)
+						color.Unset()
 						pushExec := exec.Command("bash", "-c", pushCmd)
 						pushExec.Dir = dirRepo
 						pushExec.Output()
@@ -278,24 +337,28 @@ func main() {
 						pushResult := string(pushExecOut)
 						fmt.Printf(pushResult)
 
-						titlePR := pr
+						titlePR := pr + " [" + path.Base(j) + "]"
+
 						curlPR := fmt.Sprintf("curl -v https://api.bitbucket.org/2.0/repositories/%s/pullrequests "+
 							"-u %s:%s --request POST --header 'Content-Type: application/json' "+
 							"--data '{\"title\": \"%s\", \"source\": { \"branch\": { \"name\": \"%s\" } } }'", j, user, pw, titlePR, fBranch)
 
 						//fmt.Printf("curlPR:\n%s\n", curlPR)
+						color.Set(color.FgYellow)
+						fmt.Printf("> %v\n", curlPR)
+						color.Unset()
 						prExec := exec.Command("bash", "-c", curlPR)
 						prExec.Dir = dirRepo
-						_, err := prExec.Output()
 						prExecOut, err := prExec.Output()
-						if err == nil {
-							emoji.Printf(":thumbsup:")
-						}
-						//if err != nil {
-						//	panic(err)
-						//	fmt.Printf("ERROR: %v\n", err)
-						//}
 						prResult := string(prExecOut)
+						if err == nil {
+							if !strings.Contains(prResult, "There are no changes to be pulled") {
+								emoji.Printf(":fire:")
+							}
+						}
+						if err != nil {
+							fmt.Printf("ERROR: %v\n", err)
+						}
 						fmt.Printf("PR> %v\n", prResult)
 					}
 
@@ -316,11 +379,13 @@ func main() {
 
 } //
 
-func repoAction(r, cmdstr, rdir, win, any, fail, fcess string) int {
+func doIt(cmdstr, rdir, win, any, fail, fcess string) int {
 
 	cmd := exec.Command("bash", "-c", cmdstr)
-	fmt.Printf("cmd> %s\n", cmd)
 	cmd.Dir = rdir
+	color.Set(color.FgYellow)
+	fmt.Printf("%s\n", cmd)
+	color.Unset()
 
 	var errorNumber int = 0
 	var waitStatus syscall.WaitStatus

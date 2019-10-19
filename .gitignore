@@ -15,5 +15,6 @@
 .DS_Store
 repos
 repos.*
+*.go~
 tmp
 logs
