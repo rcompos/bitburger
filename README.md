@@ -1,7 +1,7 @@
 # bb-sar
 BitBucket Cloud Search and Replace.
 
-[ 🍔  | 🍟  | 💎 | 👍  ]
+[ 🍔  | 🍟  | 💎 | 🔥 ]
 
 Perform actions for all repos by owner OR a list of repos (owner/repo) from input file.
 Default action is to list all repos for owner.
@@ -30,7 +30,7 @@ $ git config --global user.email "user@example.com"
 $ go run bb-sar.go -h
 BitBucket Cloud Search and Replace
 
-[ clone 🍔  | pull 🍟  | untracked 💎  | pull request 👍  ]
+[ clone 🍔  | pull 🍟  | untracked 💎  | pull request 🔥  ]
 
   -b string
     	Feature branch where changes are made (envvar BITBUCKET_BRANCH)
