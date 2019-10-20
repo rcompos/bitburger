@@ -16,6 +16,7 @@
 repos
 repos.*
 bb-cloud-repos.txt
+bb-cloud-repos.txt*
 *.go~
 tmp
 logs
