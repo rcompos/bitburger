@@ -15,6 +15,7 @@
 .DS_Store
 repos
 repos.*
+bb-cloud-repos.txt
 *.go~
 tmp
 logs

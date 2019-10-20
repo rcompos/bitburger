@@ -37,8 +37,8 @@ func main() {
 	flag.StringVar(&replaceStr, "r", os.Getenv("BITBUCKET_REPLACE"), "Text to replace with (envvar BITBUCKET_REPLACE)")
 	flag.StringVar(&branch, "b", os.Getenv("BITBUCKET_BRANCH"), "Feature branch where changes are made (envvar BITBUCKET_BRANCH)")
 	flag.StringVar(&prTitle, "t", os.Getenv("BITBUCKET_TITLE"), "Title for pull request (envvar BITBUCKET_PRTITLE)")
-	flag.StringVar(&inFile, "i", "", "Input file of repos (owner/repo) one per line")
-	flag.StringVar(&outFile, "f", "./logs/out.txt", "Output file")
+	flag.StringVar(&inFile, "i", "./bb-cloud-repos.txt", "Input file of repos (owner/repo) one per line")
+	flag.StringVar(&outFile, "f", "./bb-cloud-repos.txt", "Output file")
 	flag.BoolVar(&execute, "x", false, "Execute text replace")
 	flag.BoolVar(&createPR, "c", false, "Create pull request")
 	flag.BoolVar(&gitClone, "g", false, "Git clone repos")
@@ -83,10 +83,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	//if createPR {
-	//	execute = true
-	//}
-
 	myName := fmt.Sprintf(path.Base(os.Args[0]))
 	logsDir := "logs"
 	createDir(logsDir)
@@ -102,18 +98,24 @@ func main() {
 	log.SetOutput(logf) //log.Println("Test log message")
 
 	log.Printf("Current Unix Time: %v\n", time.Now().Unix())
-	//time.Sleep(2)
 
-	opt := &bitbucket.RepositoriesOptions{}
-	opt.Owner = bbOwner
-	opt.Role = bbRole // [owner|admin|contributor|member]
+	optRs := &bitbucket.RepositoriesOptions{}
+	optRs.Owner = bbOwner
+	optRs.Role = bbRole // [owner|admin|contributor|member]
 
 	c := bitbucket.NewBasicAuth(bbUser, bbPassword)
 
 	var repos *bitbucket.RepositoriesRes
+
 	var repoList []string
+	repoMap := make(map[string]string)
+
+	optR := &bitbucket.RepositoryOptions{}
+	optR.Owner = bbOwner
+	var reepo *bitbucket.Repository
 
 	if _, err := os.Stat(inFile); err == nil && inFile != "" {
+		fmt.Printf("Using repo input file: %v\n", inFile)
 		// inFile exists, use it
 		//fmt.Printf("inFile found! %v\n", inFile)
 		readDiskCache(&repoCache, inFile)
@@ -122,26 +124,35 @@ func main() {
 		//fmt.Printf("Repos:\n")
 		for _, j := range repoCache {
 			//fmt.Printf(">>  i: %v   j: %v\n", i, j)
-			repoList = append(repoList, j)
+			rSlice := strings.Split(j, " ")
+			//repoList = append(repoList, j)
+			repoMap[rSlice[0]] = rSlice[1]
 		}
 	} else {
 		//  If inFile not exist, then request from BB API
-		repos, err = c.Repositories.ListForAccount(opt)
+		fmt.Printf("Requesting repos from BB Cloud API\n")
+		repos, err = c.Repositories.ListForAccount(optRs)
 		if err != nil {
 			panic(err)
 		}
 		repositories := repos.Items
 		for _, v := range repositories {
 			repoList = append(repoList, v.Full_name)
+			// // //
+			optR.RepoSlug = v.Slug
+			reepo, err = c.Repositories.Repository.Get(optR)
+			//fmt.Printf("reepo: %v %v %v\n", reepo.Full_name, reepo.Scm, reepo.Slug)
+			repoMap[reepo.Full_name] = reepo.Scm
+			// // //
+			writeDiskCache(repoMap, outFile)
+
 		}
 	}
 
-	writeDiskCache(&repoList, outFile)
-
 	if !gitClone && !execute && !createPR && searchStr == "" {
 		// List repos and exit
-		for _, j := range repoList {
-			fmt.Println(j)
+		for r, _ := range repoMap {
+			fmt.Println(r)
 		}
 		os.Exit(0)
 	}
@@ -157,8 +168,8 @@ func main() {
 
 	//fmt.Printf("Repos:\n")
 	// TODO: Change from waitgroup to buffered channels
-	for i, j := range repoList {
-		//fmt.Printf("%v> %v\n", i, j)
+	for j, scm := range repoMap {
+		//fmt.Printf("%v> %v\n", j, scm)
 		if strings.HasPrefix(j, "#") {
 			fmt.Printf("Skipping: %v\n", j)
 			continue
@@ -167,28 +178,12 @@ func main() {
 		time.Sleep(sleepytime) // slow down to avoid api ban
 
 		wg.Add(1)
-		go func(i int, createPR bool, j, dir, owner, search, replace, user, pw, fBranch, pr, url string) {
+		go func(createPR bool, j, scm, dir, owner, search, replace, user, pw, fBranch, pr, url string) {
 			//go func(i int, j string, dir string, owner string, search string, replace string, createPR bool, user string, pw string) {
 			defer wg.Done()
 			dirOwner := dir + "/" + owner
 			dirRepo := dir + "/" + j
 			fmt.Printf("%s/%s\n", url, j)
-
-			// add check for lines starting with #
-			//if strings.HasPrefix(j, "#") {
-			//	fmt.Printf("Skipping: %v\n", j)
-			//}
-
-			repoSCM := "curl -u " + user + ":" + pw + " https://api.bitbucket.org/2.0/repositories/" + j + `| jq '.' | grep '\"scm\":' | perl -pe's/^\s*\"scm\": "(\S+)"\,\s*$/$1/'`
-			//fmt.Printf("repoSCM: %v\n", repoSCM)
-			color.Set(color.FgYellow)
-			fmt.Printf("> %v\n", repoSCM)
-			color.Unset()
-			repoSCMExec := exec.Command("bash", "-c", repoSCM)
-			repoSCMExec.Dir = dirOwner
-			repoSCMExecOut, _ := repoSCMExec.Output()
-			scm := string(repoSCMExecOut)
-			fmt.Printf("SCM: '%v'\n", scm)
 
 			if scm == "git" {
 
@@ -280,31 +275,7 @@ func main() {
 				errGitDiffIndex := doIt(gitDiffIndex, dirRepo, "", "", "", "")
 				fmt.Printf("errGitDiffIndex: %v\n", errGitDiffIndex)
 
-				/*
-					gitDiffIndex := "git status -s | wc -l"
-					color.Set(color.FgYellow)
-					fmt.Printf("> %v\n", gitDiffIndex)
-					color.Unset()
-					gdiExec := exec.Command("bash", "-c", gitDiffIndex)
-					gdiExec.Dir = dirRepo
-					var out bytes.Buffer
-					gdiExec.Stdout = &out
-					err := gdiExec.Run()
-					if err != nil {
-						fmt.Printf("ERROR>> '%v'\n", err)
-					}
-					fmt.Printf("--> '%v'\n", out.String())
-				*/
-
-				//gdiExecOut, gdiErr := gdiExec.Output()
-				//gdiResult := string(gdiExecOut)
-				//fmt.Printf("gdiResult: '%v'\n", gdiResult)
-				//fmt.Printf("gdiErr: '%v'\n", gdiErr)
-
-				//if gdiErr != nil {
 				if errGitDiffIndex != 0 {
-
-					//if errGitDiffIndex != 0 {
 					// Git untracked changes exist
 					emoji.Printf(":gem:")
 
@@ -373,7 +344,7 @@ func main() {
 
 			// end git
 			//fmt.Printf("%vth goroutine done.\n", i)
-		}(i, createPR, j, reposBaseDir, bbOwner, searchStr, replaceStr, bbUser, bbPassword, branch, prTitle, bbURL)
+		}(createPR, j, scm, reposBaseDir, bbOwner, searchStr, replaceStr, bbUser, bbPassword, branch, prTitle, bbURL)
 	}
 
 	wg.Wait()
@@ -486,15 +457,15 @@ func readDiskCache(c *[]string, cf string) {
 	}
 }
 
-func writeDiskCache(c *[]string, cf string) {
+func writeDiskCache(c map[string]string, cf string) {
 	// If the file doesn't exist, create it, or append to the file
 	//f, err := os.OpenFile(cf, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	f, err := os.OpenFile(cf, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Fatal(err)
 	}
-	for _, w := range *c {
-		outString := fmt.Sprintf("%v\n", w)
+	for fullname, scm := range c {
+		outString := fmt.Sprintf("%v %v\n", fullname, scm)
 		if _, err := f.WriteString(outString); err != nil {
 			log.Println(err)
 		}
