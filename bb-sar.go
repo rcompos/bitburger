@@ -19,7 +19,7 @@ import (
 	"github.com/rcompos/go-bitbucket"
 )
 
-//const sleepytime time.Duration = 2
+const sleepytime time.Duration = 2
 
 func main() {
 
@@ -163,6 +163,9 @@ func main() {
 			fmt.Printf("Skipping: %v\n", j)
 			continue
 		}
+
+		time.Sleep(sleepytime) // slow down to avoid api ban
+
 		wg.Add(1)
 		go func(i int, createPR bool, j, dir, owner, search, replace, user, pw, fBranch, pr, url string) {
 			//go func(i int, j string, dir string, owner string, search string, replace string, createPR bool, user string, pw string) {
@@ -176,7 +179,7 @@ func main() {
 			//	fmt.Printf("Skipping: %v\n", j)
 			//}
 
-			repoSCM := "curl -s --user " + user + ":" + pw + " https://api.bitbucket.org/2.0/repositories/" + j + `| jq '.' | grep '\"scm\":' | perl -pe's/^\s*\"scm\": "(\S+)"\,\s*$/$1/'`
+			repoSCM := "curl -u " + user + ":" + pw + " https://api.bitbucket.org/2.0/repositories/" + j + `| jq '.' | grep '\"scm\":' | perl -pe's/^\s*\"scm\": "(\S+)"\,\s*$/$1/'`
 			//fmt.Printf("repoSCM: %v\n", repoSCM)
 			color.Set(color.FgYellow)
 			fmt.Printf("> %v\n", repoSCM)
@@ -185,7 +188,7 @@ func main() {
 			repoSCMExec.Dir = dirOwner
 			repoSCMExecOut, _ := repoSCMExec.Output()
 			scm := string(repoSCMExecOut)
-			//fmt.Printf("SCM: '%v'\n", scm)
+			fmt.Printf("SCM: '%v'\n", scm)
 
 			if scm == "git" {
 
