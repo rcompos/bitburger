@@ -53,7 +53,7 @@ func main() {
 
 	if help == true {
 		color.Set(color.FgYellow)
-		fmt.Printf("BitBucket Cloud Search and Replace\n\n")
+		fmt.Printf("BitBurger - BitBucket Cloud Search and Replace\n\n")
 		color.Unset()
 		color.Set(color.FgMagenta)
 		emoji.Printf("[ clone :hamburger: | pull :fries: | changes :cherries: | pull request :fire: ]\n\n")
