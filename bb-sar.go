@@ -56,7 +56,7 @@ func main() {
 		fmt.Printf("BitBucket Cloud Search and Replace\n\n")
 		color.Unset()
 		color.Set(color.FgMagenta)
-		emoji.Printf("[ clone :hamburger: | pull :fries: | untracked :gem: | pull request :fire: ]\n\n")
+		emoji.Printf("[ clone :hamburger: | pull :fries: | changes :cherries: | pull request :fire: ]\n\n")
 		color.Unset()
 		flag.PrintDefaults()
 		os.Exit(1)
@@ -160,7 +160,7 @@ func main() {
 	}
 
 	color.Set(color.FgMagenta)
-	emoji.Printf("Acquiring repos for %s [ clone :hamburger: | pull :fries: | untracked :gem: | pull request :fire: ]\n\n", bbOwner)
+	emoji.Printf("Acquiring repos for %s [ clone :hamburger: | pull :fries: | untracked :cherries: | pull request :fire: ]\n\n", bbOwner)
 	color.Unset()
 
 	reposBaseDir := "repos"
@@ -284,7 +284,7 @@ func bitBurger(createPR, execute bool, j, scm, dir, owner, search, replace, user
 
 		if errGitDiffIndex != 0 {
 			// Git untracked changes exist
-			emoji.Printf(":gem:")
+			emoji.Printf(":cherries:")
 
 			// create Pull Request
 			if createPR == true {
