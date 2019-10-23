@@ -39,8 +39,8 @@ func main() {
 	flag.StringVar(&replaceStr, "r", os.Getenv("BITBUCKET_REPLACE"), "Text to replace with (envvar BITBUCKET_REPLACE)")
 	flag.StringVar(&branch, "b", os.Getenv("BITBUCKET_BRANCH"), "Feature branch where changes are made (envvar BITBUCKET_BRANCH)")
 	flag.StringVar(&prTitle, "t", os.Getenv("BITBUCKET_TITLE"), "Title for pull request (envvar BITBUCKET_PRTITLE)")
-	flag.StringVar(&inFile, "i", "./repos.txt", "Input file of repos (owner/repo) one per line")
-	flag.StringVar(&outFile, "f", "./repos.txt", "Output file")
+	flag.StringVar(&inFile, "i", "./repos.txt", "Input file of repos owner/repo one per line")
+	flag.StringVar(&outFile, "f", "./repos.txt", "Output repo file")
 	flag.BoolVar(&execute, "x", false, "Execute text replace")
 	flag.BoolVar(&createPR, "c", false, "Create pull request")
 	flag.BoolVar(&gitClone, "g", false, "Git clone repos")
@@ -110,11 +110,10 @@ func main() {
 	var repos *bitbucket.RepositoriesRes
 
 	var repoList []string
-	repoMap := make(map[string]string)
 
 	optR := &bitbucket.RepositoryOptions{}
 	optR.Owner = bbOwner
-	var reepo *bitbucket.Repository
+	//var reepo *bitbucket.Repository
 
 	if _, err := os.Stat(inFile); err == nil && inFile != "" {
 		fmt.Printf("Using repo input file: %v\n", inFile)
@@ -126,9 +125,7 @@ func main() {
 		//fmt.Printf("Repos:\n")
 		for _, j := range repoCache {
 			//fmt.Printf(">>  i: %v   j: %v\n", i, j)
-			rSlice := strings.Split(j, " ")
-			//repoList = append(repoList, j)
-			repoMap[rSlice[0]] = rSlice[1]
+			repoList = append(repoList, j)
 		}
 	} else {
 		//  If inFile not exist, then request from BB API
@@ -140,20 +137,18 @@ func main() {
 		repositories := repos.Items
 		for _, v := range repositories {
 			repoList = append(repoList, v.Full_name)
-			// // //
-			optR.RepoSlug = v.Slug
-			reepo, err = c.Repositories.Repository.Get(optR)
+			//optR.RepoSlug = v.Slug
+			//reepo, err = c.Repositories.Repository.Get(optR)
 			//fmt.Printf("reepo: %v %v %v\n", reepo.Full_name, reepo.Scm, reepo.Slug)
-			repoMap[reepo.Full_name] = reepo.Scm
-			// // //
-			writeDiskCache(repoMap, outFile)
+			//repoMap[reepo.Full_name] = reepo.Scm
+			writeDiskCache(repoList, outFile)
 
 		}
 	}
 
 	if !gitClone && !execute && !createPR && searchStr == "" {
 		// List repos and exit
-		for r := range repoMap {
+		for _, r := range repoList {
 			fmt.Println(r)
 		}
 		os.Exit(0)
@@ -168,15 +163,15 @@ func main() {
 
 	//fmt.Printf("Repos:\n")
 	// TODO: Change from waitgroup to buffered channels
-	for j, scm := range repoMap {
-		//fmt.Printf("%v> %v\n", j, scm)
+	for i, j := range repoList {
+		fmt.Printf("%v> %v\n", i, j)
 		if strings.HasPrefix(j, "#") {
 			fmt.Printf("Skipping: %v\n", j)
 			continue
 		}
 		//time.Sleep(sleepytime) // slow down to avoid api ban
 		wg.Add(1)
-		go bitBurger(createPR, execute, j, scm, reposBaseDir, bbOwner, searchStr, replaceStr, bbUser, bbPassword, branch, prTitle, bbURL)
+		go bitBurger(createPR, execute, j, reposBaseDir, bbOwner, searchStr, replaceStr, bbUser, bbPassword, branch, prTitle, bbURL)
 	}
 
 	wg.Wait()
@@ -185,170 +180,180 @@ func main() {
 
 } //
 
-func bitBurger(createPR, execute bool, j, scm, dir, owner, search, replace, user, pw, fBranch, pr, url string) {
+func bitBurger(createPR, execute bool, j, dir, owner, search, replace, user, pw, fBranch, pr, url string) {
 	//go func(i int, j string, dir string, owner string, search string, replace string, createPR bool, user string, pw string) {
 	defer wg.Done()
 	dirOwner := dir + "/" + owner
 	dirRepo := dir + "/" + j
 	fmt.Printf("%s/%s\n", url, j)
 
-	if scm == "git" {
+	gitClone := "git clone " + url + "/" + j
+	errCloneNum := doIt(gitClone, dirOwner, ":hamburger:", "", "", "")
 
-		gitClone := "git clone " + url + "/" + j
-		errCloneNum := doIt(gitClone, dirOwner, ":hamburger:", "", "", "")
-		if errCloneNum == 128 {
+	//checkDirExistCmd := ""
+	//checkDirExist := doIt(checkDirExistCmd, dirOwner, ":hamburger:", "", "", "")
 
-			gitPullOrigin := "git pull origin `git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@' master`"
-			errPullOriginNum := doIt(gitPullOrigin, dirRepo, "", "", "", "")
-			if errPullOriginNum != 0 {
-				emoji.Printf(":poop:")
-			}
-
-			//gitPull := "git pull"
-			gitPull := "git branch --set-upstream-to=origin/" + fBranch + " " + fBranch
-			errPullNum := doIt(gitPull, dirRepo, ":fries:", "", "", "")
-			if errPullNum == 1 {
-				upstreamCmd := "git push --set-upstream origin " + fBranch
-				color.Set(color.FgYellow)
-				fmt.Printf("> %v\n", upstreamCmd)
-				color.Unset()
-				upstreamExec := exec.Command("bash", "-c", upstreamCmd)
-				upstreamExec.Dir = dirRepo
-				upstreamExec.Output()
-				upstreamExecOut, _ := upstreamExec.Output()
-				upstreamResult := string(upstreamExecOut)
-				fmt.Printf(">> upstreamResult: %v\n", upstreamResult)
-			}
-			if errPullNum != 0 {
-				emoji.Printf(":fork_and_knife:")
-			}
-		}
-
-		branchCmd := "git checkout -b " + fBranch
-		color.Set(color.FgYellow)
-		fmt.Printf("> %v\n", branchCmd)
-		color.Unset()
-		branchExec := exec.Command("bash", "-c", branchCmd)
-		branchExec.Dir = dirRepo
-		branchExecOut, _ := branchExec.Output()
-		bResult := string(branchExecOut)
-		fmt.Printf(bResult)
-
-		upstreamCmd := "git push --set-upstream origin " + fBranch
-		color.Set(color.FgYellow)
-		fmt.Printf("> %v\n", upstreamCmd)
-		color.Unset()
-		upstreamExec := exec.Command("bash", "-c", upstreamCmd)
-		upstreamExec.Dir = dirRepo
-		upstreamExec.Output()
-		upstreamExecOut, _ := upstreamExec.Output()
-		upstreamResult := string(upstreamExecOut)
-		fmt.Printf(upstreamResult)
-
-		var sar string
-		//# One-liner shell command will search and replace all files recursively.
-		if execute == true {
-			sar = `find . -path ./.git -prune -o -type f -print  -exec grep -Iq . {} \; -exec perl -i -pe"s/` +
-				search + `/` + replace + `/g" {} \;`
-		} else if search != "" && replace != "" {
-			sar = `find . -path ./.git -prune -o -type f -print -exec grep -Iq . {} \; -exec perl -ne" print if s/` +
-				search + `/` + replace + `/g" {} \;`
-		} else if search != "" {
-			sar = `find . -path ./.git -prune -o -type f -print -exec grep -Iq . {} \; -exec perl -ne" print if /` +
-				search + `/g" {} \;`
-		}
-
-		if sar != "" {
-			sarExec := exec.Command("bash", "-c", sar)
-			color.Set(color.FgYellow)
-			fmt.Printf("> %v\n", sar)
-			color.Unset()
-			sarExec.Dir = dirRepo
-			sarExecOut, err := sarExec.Output()
-			if err != nil {
-				panic(err)
-				fmt.Printf("ERROR: %v\n", err)
-			}
-			searchResult := string(sarExecOut)
-			color.Set(color.FgBlue)
-			fmt.Printf(searchResult)
-			color.Unset()
-		}
-
-		//fmt.Println("dirRepo: ", dirRepo)
-		// Check for untracked changes
-		gitDiffIndex := "git diff-index --quiet HEAD --;"
-		//gitDiffIndex := `git status -s | wc -l | perl -pe's/^\s+(\d+)\s*/$1/'`
-		errGitDiffIndex := doIt(gitDiffIndex, dirRepo, "", "", "", "")
-		fmt.Printf("errGitDiffIndex: %v\n", errGitDiffIndex)
-
-		if errGitDiffIndex != 0 {
-			// Git untracked changes exist
-			emoji.Printf(":cherries:")
-
-			// create Pull Request
-			if createPR == true {
-				commitCmd := "git commit -am'Replace " + search + " with " + replace + "'"
-				color.Set(color.FgYellow)
-				fmt.Printf("> %v\n", commitCmd)
-				color.Unset()
-				commitExec := exec.Command("bash", "-c", commitCmd)
-				commitExec.Dir = dirRepo
-				commitExec.Output()
-				commitExecOut, _ := commitExec.Output()
-				//if err != nil {
-				//	panic(err)
-				//	fmt.Printf("ERROR: %v\n", err)
-				//}
-				commitResult := string(commitExecOut)
-				fmt.Printf(commitResult)
-
-				pushCmd := "git push"
-				color.Set(color.FgYellow)
-				fmt.Printf("> %v\n", pushCmd)
-				color.Unset()
-				pushExec := exec.Command("bash", "-c", pushCmd)
-				pushExec.Dir = dirRepo
-				pushExec.Output()
-				pushExecOut, _ := pushExec.Output()
-				//if err != nil {
-				//	panic(err)
-				//	fmt.Printf("ERROR: %v\n", err)
-				//}
-				pushResult := string(pushExecOut)
-				fmt.Printf(pushResult)
-
-				titlePR := pr + " [" + path.Base(j) + "]"
-
-				curlPR := fmt.Sprintf("curl -v https://api.bitbucket.org/2.0/repositories/%s/pullrequests "+
-					"-u %s:%s --request POST --header 'Content-Type: application/json' "+
-					"--data '{\"title\": \"%s\", \"source\": { \"branch\": { \"name\": \"%s\" } } }'", j, user, pw, titlePR, fBranch)
-
-				//fmt.Printf("curlPR:\n%s\n", curlPR)
-				color.Set(color.FgYellow)
-				fmt.Printf("> %v\n", curlPR)
-				color.Unset()
-				prExec := exec.Command("bash", "-c", curlPR)
-				prExec.Dir = dirRepo
-				prExecOut, err := prExec.Output()
-				prResult := string(prExecOut)
-				if err == nil {
-					if !strings.Contains(prResult, "There are no changes to be pulled") {
-						emoji.Printf(":fire:")
-					}
-				}
-				if err != nil {
-					fmt.Printf("ERROR: %v\n", err)
-				}
-				fmt.Printf("PR> %v\n", prResult)
-			}
-
-		}
-	} else {
-		fmt.Printf("ERROR: Unsupported SCM: %s %s\n", j, scm)
-		log.Printf("ERROR: Unsupported SCM: %s %s\n", j, scm)
+	if _, err := os.Stat(dirRepo); os.IsNotExist(err) {
+		// If directory does not exist
+		fmt.Printf("ERROR: Repo could not be cloned: %s", j)
+		log.Printf("ERROR: Repo could not be cloned: %s", j)
+		return
 	}
 
+	//if _, err := os.Stat("/path/to/whatever"); !os.IsNotExist(err) {
+	//	// path/to/whatever exists
+	//}
+
+	if errCloneNum == 128 {
+
+		gitPullOrigin := "git pull origin `git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@' master`"
+		errPullOriginNum := doIt(gitPullOrigin, dirRepo, "", "", "", "")
+		if errPullOriginNum != 0 {
+			emoji.Printf(":poop:")
+		}
+
+		//gitPull := "git pull"
+		gitPull := "git branch --set-upstream-to=origin/" + fBranch + " " + fBranch
+		errPullNum := doIt(gitPull, dirRepo, ":fries:", "", "", "")
+		if errPullNum == 1 {
+			upstreamCmd := "git push --set-upstream origin " + fBranch
+			color.Set(color.FgYellow)
+			fmt.Printf("> %v\n", upstreamCmd)
+			color.Unset()
+			upstreamExec := exec.Command("bash", "-c", upstreamCmd)
+			upstreamExec.Dir = dirRepo
+			upstreamExec.Output()
+			upstreamExecOut, _ := upstreamExec.Output()
+			upstreamResult := string(upstreamExecOut)
+			fmt.Printf(">> upstreamResult: %v\n", upstreamResult)
+		}
+		if errPullNum != 0 {
+			emoji.Printf(":fork_and_knife:")
+		}
+	}
+
+	branchCmd := "git checkout -b " + fBranch
+	color.Set(color.FgYellow)
+	fmt.Printf("> %v\n", branchCmd)
+	color.Unset()
+	branchExec := exec.Command("bash", "-c", branchCmd)
+	branchExec.Dir = dirRepo
+	branchExecOut, _ := branchExec.Output()
+	bResult := string(branchExecOut)
+	fmt.Printf(bResult)
+
+	upstreamCmd := "git push --set-upstream origin " + fBranch
+	color.Set(color.FgYellow)
+	fmt.Printf("> %v\n", upstreamCmd)
+	color.Unset()
+	upstreamExec := exec.Command("bash", "-c", upstreamCmd)
+	upstreamExec.Dir = dirRepo
+	upstreamExec.Output()
+	upstreamExecOut, _ := upstreamExec.Output()
+	upstreamResult := string(upstreamExecOut)
+	fmt.Printf(upstreamResult)
+
+	var sar string
+	//# One-liner shell command will search and replace all files recursively.
+	if execute == true {
+		sar = `find . -path ./.git -prune -o -type f -print  -exec grep -Iq . {} \; -exec perl -i -pe"s/` +
+			search + `/` + replace + `/g" {} \;`
+	} else if search != "" && replace != "" {
+		sar = `find . -path ./.git -prune -o -type f -print -exec grep -Iq . {} \; -exec perl -ne" print if s/` +
+			search + `/` + replace + `/g" {} \;`
+	} else if search != "" {
+		sar = `find . -path ./.git -prune -o -type f -print -exec grep -Iq . {} \; -exec perl -ne" print if /` +
+			search + `/g" {} \;`
+	}
+
+	if sar != "" {
+		sarExec := exec.Command("bash", "-c", sar)
+		color.Set(color.FgYellow)
+		fmt.Printf("> %v\n", sar)
+		color.Unset()
+		sarExec.Dir = dirRepo
+		sarExecOut, err := sarExec.Output()
+		if err != nil {
+			//panic(err)
+			fmt.Printf("ERROR: %v\n", err)
+			log.Printf("ERROR: %v\n", err)
+		}
+		searchResult := string(sarExecOut)
+		color.Set(color.FgBlue)
+		fmt.Printf(searchResult)
+		color.Unset()
+		log.Printf(searchResult)
+	}
+
+	//fmt.Println("dirRepo: ", dirRepo)
+	// Check for untracked changes
+	gitDiffIndex := "git diff-index --quiet HEAD --;"
+	//gitDiffIndex := `git status -s | wc -l | perl -pe's/^\s+(\d+)\s*/$1/'`
+	errGitDiffIndex := doIt(gitDiffIndex, dirRepo, "", "", "", "")
+	fmt.Printf("errGitDiffIndex: %v\n", errGitDiffIndex)
+
+	if errGitDiffIndex != 0 {
+		// Git untracked changes exist
+		emoji.Printf(":cherries:")
+
+		// create Pull Request
+		if createPR == true {
+			commitCmd := "git commit -am'Replace " + search + " with " + replace + "'"
+			color.Set(color.FgYellow)
+			fmt.Printf("> %v\n", commitCmd)
+			color.Unset()
+			commitExec := exec.Command("bash", "-c", commitCmd)
+			commitExec.Dir = dirRepo
+			commitExec.Output()
+			commitExecOut, _ := commitExec.Output()
+			//if err != nil {
+			//	panic(err)
+			//	fmt.Printf("ERROR: %v\n", err)
+			//}
+			commitResult := string(commitExecOut)
+			fmt.Printf(commitResult)
+
+			pushCmd := "git push"
+			color.Set(color.FgYellow)
+			fmt.Printf("> %v\n", pushCmd)
+			color.Unset()
+			pushExec := exec.Command("bash", "-c", pushCmd)
+			pushExec.Dir = dirRepo
+			pushExec.Output()
+			pushExecOut, _ := pushExec.Output()
+			//if err != nil {
+			//	panic(err)
+			//	fmt.Printf("ERROR: %v\n", err)
+			//}
+			pushResult := string(pushExecOut)
+			fmt.Printf(pushResult)
+
+			titlePR := pr + " [" + path.Base(j) + "]"
+
+			curlPR := fmt.Sprintf("curl -v https://api.bitbucket.org/2.0/repositories/%s/pullrequests "+
+				"-u %s:%s --request POST --header 'Content-Type: application/json' "+
+				"--data '{\"title\": \"%s\", \"source\": { \"branch\": { \"name\": \"%s\" } } }'", j, user, pw, titlePR, fBranch)
+
+			//fmt.Printf("curlPR:\n%s\n", curlPR)
+			color.Set(color.FgYellow)
+			fmt.Printf("> %v\n", curlPR)
+			color.Unset()
+			prExec := exec.Command("bash", "-c", curlPR)
+			prExec.Dir = dirRepo
+			prExecOut, err := prExec.Output()
+			prResult := string(prExecOut)
+			if err == nil {
+				if !strings.Contains(prResult, "There are no changes to be pulled") {
+					emoji.Printf(":fire:")
+				}
+			}
+			if err != nil {
+				fmt.Printf("ERROR: %v\n", err)
+			}
+			fmt.Printf("PR> %v\n", prResult)
+		}
+
+	}
 	// end git
 	//fmt.Printf("%vth goroutine done.\n", i)
 }
@@ -457,15 +462,15 @@ func readDiskCache(c *[]string, cf string) {
 	}
 }
 
-func writeDiskCache(c map[string]string, cf string) {
+func writeDiskCache(c []string, cf string) {
 	// If the file doesn't exist, create it, or append to the file
 	//f, err := os.OpenFile(cf, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	f, err := os.OpenFile(cf, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Fatal(err)
 	}
-	for fullname, scm := range c {
-		outString := fmt.Sprintf("%v %v\n", fullname, scm)
+	for _, fullname := range c {
+		outString := fmt.Sprintf("%v\n", fullname)
 		if _, err := f.WriteString(outString); err != nil {
 			log.Println(err)
 		}
