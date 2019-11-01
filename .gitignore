@@ -11,12 +11,10 @@
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 
-# bb-sar
+# Go excludes
 .DS_Store
 repos
 repos.*
-bb-cloud-repos.txt
-bb-cloud-repos.txt*
 *.go~
 tmp
 logs

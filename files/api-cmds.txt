@@ -1,0 +1,14 @@
+### BitBucket Cloud API commands ###
+
+# List repos by project
+# curl -s -u composr:'Free2fly!!' https://bitbucket.ngage.netapp.com/rest/api/1.0/projects/hcitest/repos/ | jq -r '.values[].slug'
+
+
+### BitBucket Server API commands ###
+
+# https://docs.atlassian.com/bitbucket-server/rest/5.7.1/bitbucket-rest.html#idm45187779531808
+
+# /rest/api/1.0/projects/{projectKey}/repos/{repositorySlug}/pull-requests/{pullRequestId}
+# curl -s -u composr:'Free2fly!!' https://bitbucket.ngage.netapp.com/rest/api/1.0/projects/{projectKey}/repos/{repositorySlug}/pull-requests/{pullRequestId}
+
+# curl -s -u composr:'Free2fly!!' https://bitbucket.ngage.netapp.com/rest/api/1.0/projects/hcitest/repos/hci-infra/pull-requests/{pullRequestId}
