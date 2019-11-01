@@ -1,7 +1,7 @@
 # BitBurger
 BitBurger - BitBucket Cloud Search and Replace.
 
-[ 🍔  | 🍟  | 🍒 | 🔥 ]
+ [ 🔥 | 🍟 | 🍺 | 🍔 ]
 
 Perform actions for all repos by owner OR a list of repos (owner/repo) from input file.
 Default action is to list all repos for owner.
@@ -30,7 +30,7 @@ $ git config --global user.email "user@example.com"
 $ go run bitburger-cloud.go -h
 BitBurger - BitBucket Cloud Search and Replace
 
-[ clone 🍔  | pull 🍟  | changes 🍒  | pull request 🔥  ]
+[ clone 🔥  | pull 🍟  | changes 🍺  | pull request 🍔  ]
 
   -b string
     	Feature branch where changes are made (envvar BITBUCKET_BRANCH)
