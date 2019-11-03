@@ -18,4 +18,5 @@ repos.*
 *.go~
 tmp
 logs
+go.mod
 go.sum
