@@ -136,7 +136,7 @@ func Sar(createPR, execute, debug bool,
 	color.Set(color.FgMagenta)
 	fmt.Printf("###  %s  ###\n", dirRepo)
 	color.Unset()
-	fmt.Printf("TEST: %s\n", dirOwner)
+	//fmt.Printf("TEST: %s\n", dirOwner)
 	if _, err := os.Stat(dirOwner); err != nil {
 		// does not exist
 		fmt.Printf("ERROR: Could not clone %s\n", dirRepo)
