@@ -106,7 +106,9 @@ func main() {
 		}
 	} else {
 
-		for i, pj := range projects {
+		for i, pjTmp := range projects {
+
+			pj := strings.ToLower(pjTmp)
 
 			if debug {
 				fmt.Printf(">>  i: %v   pj: %v\n", i, pj)
