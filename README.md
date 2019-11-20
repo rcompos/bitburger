@@ -27,36 +27,31 @@ $ git config --global user.email "user@example.com"
 ```
 
 ```
-$ go run bitburger-cloud.go -h
-BitBurger - BitBucket Cloud Search and Replace
+$ go run ./cmd/cli-server/main.go -h
+BitBurger Server - BitBucket Server Search and Replace
 
 [ clone 🔥  | pull 🍟  | changes 🍺  | pull request 🍔  ]
 
   -b string
-    	Feature branch where changes are made (envvar BITBUCKET_BRANCH)
+    	Feature branch where changes are made (envvar BBS_BRANCH)
   -c	Create pull request
-  -e string
-    	Bitbucket role (envvar BITBUCKET_ROLE)
-  -f string
-    	Output file (default "./repos.txt")
   -g	Git clone repos
   -h	Help
   -i string
-    	Input file of repos (owner/repo) one per line (default "./repos.txt")
-  -o string
-    	Bitbucket owner (required) (envvar BITBUCKET_OWNER)
+    	Input file of project/repo one per line
+  -j string
+    	Bitbucket project (required) (envvar BBS_PROJECT)
   -p string
-    	Bitbucket password (required) (envvar BITBUCKET_PASSWORD)
+    	Bitbucket password (required) (envvar BBS_PASSWORD)
   -r string
-    	Text to replace with (envvar BITBUCKET_REPLACE)
+    	Text to replace with (envvar BBS_REPLACE)
   -s string
-    	Text to search for (envvar BITBUCKET_SEARCH)
+    	Text to search for (envvar BBS_SEARCH)
   -t string
-    	Title for pull request (envvar BITBUCKET_PRTITLE)
+    	Title for pull request (envvar BBS_PRTITLE)
   -u string
-    	Bitbucket user (required) (envvar BITBUCKET_USERNAME)
+    	Bitbucket user (required) (envvar BBS_USERNAME)
   -x	Execute text replace
-exit status 1
 ```
 
 
@@ -65,37 +60,37 @@ Set credentials with CLI arguments or environmental variables.
 ```
 export BITBUCKET_USERNAME=<username>
 export BITBUCKET_PASSWORD=<password>
-export BITBUCKET_OWNER=<owner>
+export BITBUCKET_PROJECT=<owner>
 ```
 
 ### Examples
 
-List all repos under BitBucket Cloud owner \<owner\>.
+List all repos under BitBucket Server project \<owner\>.
 
 ```
-$ go run bitburger-cloud.go -u <user> -p <password> -o <owner>
+$ go run ./cmd/cli-server/main.go -u <user> -p <password> -j <project>
 ```
 
 User, password and owner are set with envvars.  For all repos under BitBucket Cloud owner \<owner\>, search for 'docker.example.net' and replace with 'artifactory.example.net', create feature branch 'HCI-5165-docker-to-artifactory' and create pull request with title 'HCI-5165 :fire: Artifactory Docker Registry DNS docker.example.net -> artifactory.example.net'.
 
 ```
-$ go run bitburger-cloud.go -x -s 'docker.example.net' -r 'artifactory.example.net' -c -b 'HCI-5165-dns-docker-to-artifactory' -t 'HCI-5165 :fire: Artifactory Docker Registry DNS docker.example.net -> artifactory.example.net'
+$ go run ./cmd/cli-server/main.go -x -s 'docker.example.net' -r 'artifactory.example.net' -c -b 'HCI-5165-dns-docker-to-artifactory' -t 'HCI-5165 :fire: Artifactory Docker Registry DNS docker.example.net -> artifactory.example.net'
 ```
 
 Same thing, but repos read from input file, one per line.
 
 ```
-$ go run bitburger-cloud.go -i tmp/myrepos.txt -x -s 'docker.example.net' -r 'artifactory.example.net' -c -b 'HCI-5165-dns-docker-to-artifactory' -t 'HCI-5165 :fire: Artifactory Docker Registry DNS docker.example.net -> artifactory.example.net'
+$ go run ./cmd/cli-server/main.go -i tmp/myrepos.txt -x -s 'docker.example.net' -r 'artifactory.example.net' -c -b 'HCI-5165-dns-docker-to-artifactory' -t 'HCI-5165 :fire: Artifactory Docker Registry DNS docker.example.net -> artifactory.example.net'
 ```
 
-Clone all repos under BitBucket Cloud owner \<owner\>.
+Clone all repos under BitBucket Server owner \<owner\>.
 
 ```
-$ go run bitburger-cloud.go -u <user> -p <password> -o <owner> -g
+$ go run ./cmd/cli-server/main.go -u <user> -p <password> -j <project> -g
 ```
 
-Search all repos under BitBucket Cloud owner \<owner\> for \<term\>.
+Search all repos under BitBucket Server owner \<project\> for \<term\>.
 
 ```
-$ go run bitburger-cloud.go -u <user> -p <password> -o <owner> -s <term>
+$ go run ./cmd/cli-server/main.go -u <user> -p <password> -j <project> -s <term>
 ```
